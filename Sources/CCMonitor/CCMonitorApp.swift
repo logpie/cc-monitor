@@ -1,14 +1,17 @@
 import SwiftUI
 import ServiceManagement
 
-@main
-struct CCMonitorApp: App {
-    @StateObject private var monitor = SessionMonitor()
-
-    init() {
-        // Hide from Dock (no Info.plist in SPM, so we do this programmatically)
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Hide from Dock (no Info.plist in SPM)
         NSApp.setActivationPolicy(.accessory)
     }
+}
+
+@main
+struct CCMonitorApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var monitor = SessionMonitor()
 
     var body: some Scene {
         MenuBarExtra {
