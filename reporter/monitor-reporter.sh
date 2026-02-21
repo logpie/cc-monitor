@@ -20,10 +20,24 @@ context_pct=$(echo "$input" | jq -r '.context_window.used_percentage // 0')
 context_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 cost_usd=$(echo "$input" | jq -r '.cost.total_cost_usd // 0')
 
-# Get git branch (best effort)
+# Get git info (best effort)
 git_branch=""
+git_dirty=0
+git_staged=0
+git_untracked=0
 if [ -n "$project_dir" ] && [ -d "$project_dir/.git" ]; then
     git_branch=$(git -C "$project_dir" branch --show-current 2>/dev/null || echo "")
+    # Porcelain v1: first char = staged, second char = unstaged, ? = untracked
+    while IFS= read -r line; do
+        xy="${line:0:2}"
+        case "$xy" in
+            "??"*) git_untracked=$((git_untracked + 1)) ;;
+            *)
+                [ "${xy:0:1}" != " " ] && [ "${xy:0:1}" != "?" ] && git_staged=$((git_staged + 1))
+                [ "${xy:1:1}" != " " ] && [ "${xy:1:1}" != "?" ] && git_dirty=$((git_dirty + 1))
+                ;;
+        esac
+    done < <(git -C "$project_dir" status --porcelain 2>/dev/null || true)
 fi
 
 # Get TTY for terminal switching
@@ -77,10 +91,18 @@ jq -n \
     --arg tmux "$tmux_target" \
     --arg tmux_wname "$tmux_window_name" \
     --arg tab_title "$tab_title" \
+    --arg pdir "$project_dir" \
+    --argjson gdirty "$git_dirty" \
+    --argjson gstaged "$git_staged" \
+    --argjson guntracked "$git_untracked" \
     '{
         session_id: $sid,
         project_name: $pname,
+        project_dir: $pdir,
         git_branch: $branch,
+        git_dirty: $gdirty,
+        git_staged: $gstaged,
+        git_untracked: $guntracked,
         model: $model,
         context_used_pct: $ctx_pct,
         context_window_size: $ctx_size,

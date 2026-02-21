@@ -23,7 +23,11 @@ public enum AgentStatus: String, Codable, Hashable {
 public struct SessionInfo: Identifiable, Codable {
     public let sessionId: String
     public let projectName: String
+    public var projectDir: String?
     public let gitBranch: String
+    public var gitDirty: Int?
+    public var gitStaged: Int?
+    public var gitUntracked: Int?
     public let model: String
     public let contextUsedPct: Double
     public let contextWindowSize: Int
@@ -44,14 +48,37 @@ public struct SessionInfo: Identifiable, Codable {
         return projectName
     }
 
-    public var displaySubtitle: String {
-        return projectName
+    /// Git status summary (e.g. "+3 ~2 ?1")
+    public var gitStatusSummary: String? {
+        let s = gitStaged ?? 0
+        let d = gitDirty ?? 0
+        let u = gitUntracked ?? 0
+        if s == 0 && d == 0 && u == 0 { return nil }
+        var parts: [String] = []
+        if s > 0 { parts.append("+\(s)") }
+        if d > 0 { parts.append("~\(d)") }
+        if u > 0 { parts.append("?\(u)") }
+        return parts.joined(separator: " ")
+    }
+
+    /// Shortened path for disambiguation (e.g. "~/work/cc-monitor")
+    public var displayPath: String {
+        guard let dir = projectDir, !dir.isEmpty else { return projectName }
+        let home = NSHomeDirectory()
+        if dir.hasPrefix(home) {
+            return "~" + dir.dropFirst(home.count)
+        }
+        return dir
     }
 
     enum CodingKeys: String, CodingKey {
         case sessionId = "session_id"
         case projectName = "project_name"
+        case projectDir = "project_dir"
         case gitBranch = "git_branch"
+        case gitDirty = "git_dirty"
+        case gitStaged = "git_staged"
+        case gitUntracked = "git_untracked"
         case model
         case contextUsedPct = "context_used_pct"
         case contextWindowSize = "context_window_size"

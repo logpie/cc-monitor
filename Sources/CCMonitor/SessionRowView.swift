@@ -8,33 +8,37 @@ struct SessionRowView: View {
     private var status: AgentStatus { session.cachedStatus }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Line 1: dot + name + branch + status + relative time
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 3) {
+            // Line 1: dot + name + branch + git status + status + time
+            HStack(spacing: 5) {
                 Circle()
                     .fill(Color(nsColor: status.color))
-                    .frame(width: 8, height: 8)
+                    .frame(width: 7, height: 7)
 
-                Text(session.displayLabel)
-                    .font(.system(.body, weight: .medium))
+                Text(session.projectName)
+                    .font(.system(.callout, weight: .medium))
                     .lineLimit(1)
 
-                if session.displayLabel != session.projectName {
-                    Text(session.projectName)
-                        .font(.callout)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
+                if !session.gitBranch.isEmpty {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.triangle.branch")
+                            .font(.system(size: 8))
+                        Text(session.gitBranch)
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color.primary.opacity(0.05))
+                    .cornerRadius(3)
+                    .lineLimit(1)
                 }
 
-                if !session.gitBranch.isEmpty {
-                    Text(session.gitBranch)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.primary.opacity(0.06))
-                        .cornerRadius(3)
-                        .lineLimit(1)
+                if let gitStatus = session.gitStatusSummary {
+                    Text(gitStatus)
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .monospacedDigit()
                 }
 
                 Spacer()
@@ -49,8 +53,16 @@ struct SessionRowView: View {
                     .monospacedDigit()
             }
 
-            // Line 2: model · context bar · cost
+            // Line 2: path · model · context bar · cost
             HStack(spacing: 0) {
+                Text(session.displayPath)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+
+                Text("  ·  ")
+                    .foregroundStyle(.quaternary)
+
                 Text(session.model)
                     .foregroundStyle(.secondary)
 
@@ -69,7 +81,7 @@ struct SessionRowView: View {
             .font(.caption)
             .padding(.leading, 14)
 
-            // Line 3: task context (only if available)
+            // Line 3: last task context (persists across state changes)
             if let context = session.hookContext, !context.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: contextIcon(for: context))
