@@ -57,13 +57,14 @@ func menuBarDotsImage(sessions: [SessionInfo], flashAttention: Bool = false) -> 
             let path = NSBezierPath(roundedRect: rect, xRadius: pillHeight / 2, yRadius: pillHeight / 2)
 
             if pill.dimmed {
-                pill.color.withAlphaComponent(0.25).setFill()
+                // Flash "on" beat: white pill for max contrast
+                NSColor.white.withAlphaComponent(0.9).setFill()
             } else {
                 pill.color.withAlphaComponent(0.85).setFill()
             }
             path.fill()
 
-            let textColor: NSColor = pill.dimmed ? .white.withAlphaComponent(0.4) : .white
+            let textColor: NSColor = pill.dimmed ? pill.color : .white
             let textSize = (pill.text as NSString).size(withAttributes: [.font: font])
             let textX = x + (pill.width - textSize.width) / 2
             let textY = y + (pillHeight - textSize.height) / 2
