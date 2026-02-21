@@ -16,6 +16,8 @@ A macOS menu bar app that monitors all your active [Claude Code](https://docs.an
   - Current task context (e.g. "Edit StatusDot.swift", "$ npm test")
   - Last assistant response (when idle)
 - **Click to focus** — click any session to switch to its terminal tab (Ghostty, tmux, or plain terminal)
+- **9 color themes** — Dracula, Tokyo Night, One Dark, Catppuccin, Gruvbox, Nord, Solarized, Monokai, and macOS Native. Themes cover the entire panel: background, text, icons, cards, status dots, git colors, and context bar
+- **Adjustable transparency** — slider to control panel background opacity
 - **Launch at Login** support
 
 ## Requirements
