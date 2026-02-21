@@ -4,62 +4,75 @@ import AppKit
 extension AgentStatus {
     var color: NSColor {
         switch self {
-        case .attention:    return .systemYellow
+        case .attention:    return .systemOrange
         case .working:      return .systemBlue
         case .idle:         return .systemGreen
         case .disconnected: return .systemGray
         }
     }
-
 }
 
-/// Renders colored dots with counts for non-zero statuses
+/// Renders pill-shaped status badges in the menu bar
 func menuBarDotsImage(sessions: [SessionInfo], flashAttention: Bool = false) -> NSImage {
     let grouped = Dictionary(grouping: sessions) { $0.cachedStatus }
 
-    let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
-    let dotSize: CGFloat = 6
-    let dotTextGap: CGFloat = 1
-    let pairGap: CGFloat = 4
+    let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .bold)
+    let pillHeight: CGFloat = 14
+    let pillPadH: CGFloat = 5
+    let pillGap: CGFloat = 3
     let height: CGFloat = 18
-    let textColor: NSColor = .labelColor
 
-    // Only show statuses that have sessions (or always show working/idle for context)
-    var segments: [(color: NSColor, text: String, textWidth: CGFloat)] = []
+    struct Pill {
+        let color: NSColor
+        let text: String
+        let width: CGFloat
+        let dimmed: Bool
+    }
+
+    var pills: [Pill] = []
     for status in AgentStatus.displayOrder {
         let count = grouped[status]?.count ?? 0
-        // Always show attention if > 0, always show working/idle, skip disconnected if 0
         if count == 0 && (status == .attention || status == .disconnected) { continue }
-        // Flash: hide the attention dot on the "off" beat
-        if status == .attention && flashAttention { continue }
-        let text = "\(count)"
+
+        let text = status == .attention ? "!" : "\(count)"
         let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
-        segments.append((status.color, text, textWidth))
+        let pillWidth = textWidth + pillPadH * 2
+
+        let dimmed = status == .attention && flashAttention
+        pills.append(Pill(color: status.color, text: text, width: pillWidth, dimmed: dimmed))
     }
 
-    if segments.isEmpty {
-        return singleDotImage(color: .systemGray)
+    if pills.isEmpty {
+        return singlePillImage()
     }
 
-    let totalWidth = segments.reduce(CGFloat(0)) { acc, seg in
-        acc + dotSize + dotTextGap + seg.textWidth
-    } + CGFloat(segments.count - 1) * pairGap
+    let totalWidth = pills.reduce(CGFloat(0)) { $0 + $1.width }
+        + CGFloat(pills.count - 1) * pillGap
 
     let image = NSImage(size: NSSize(width: totalWidth, height: height), flipped: false) { _ in
         var x: CGFloat = 0
-        for seg in segments {
-            let dotY = (height - dotSize) / 2
-            seg.color.setFill()
-            NSBezierPath(ovalIn: NSRect(x: x, y: dotY, width: dotSize, height: dotSize)).fill()
-            x += dotSize + dotTextGap
+        for pill in pills {
+            let y = (height - pillHeight) / 2
+            let rect = NSRect(x: x, y: y, width: pill.width, height: pillHeight)
+            let path = NSBezierPath(roundedRect: rect, xRadius: pillHeight / 2, yRadius: pillHeight / 2)
 
-            let textSize = (seg.text as NSString).size(withAttributes: [.font: font])
-            let textY = (height - textSize.height) / 2
-            (seg.text as NSString).draw(
-                at: NSPoint(x: x, y: textY),
+            if pill.dimmed {
+                pill.color.withAlphaComponent(0.25).setFill()
+            } else {
+                pill.color.withAlphaComponent(0.85).setFill()
+            }
+            path.fill()
+
+            let textColor: NSColor = pill.dimmed ? .white.withAlphaComponent(0.4) : .white
+            let textSize = (pill.text as NSString).size(withAttributes: [.font: font])
+            let textX = x + (pill.width - textSize.width) / 2
+            let textY = y + (pillHeight - textSize.height) / 2
+            (pill.text as NSString).draw(
+                at: NSPoint(x: textX, y: textY),
                 withAttributes: [.font: font, .foregroundColor: textColor]
             )
-            x += seg.textWidth + pairGap
+
+            x += pill.width + pillGap
         }
         return true
     }
@@ -67,13 +80,13 @@ func menuBarDotsImage(sessions: [SessionInfo], flashAttention: Bool = false) -> 
     return image
 }
 
-private func singleDotImage(color: NSColor) -> NSImage {
-    let size: CGFloat = 8
+private func singlePillImage() -> NSImage {
     let height: CGFloat = 18
-    let image = NSImage(size: NSSize(width: size, height: height), flipped: false) { _ in
-        let y = (height - size) / 2
-        color.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 0, y: y, width: size, height: size)).fill()
+    let dotSize: CGFloat = 8
+    let image = NSImage(size: NSSize(width: dotSize, height: height), flipped: false) { _ in
+        let y = (height - dotSize) / 2
+        NSColor.systemGray.withAlphaComponent(0.5).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 0, y: y, width: dotSize, height: dotSize)).fill()
         return true
     }
     image.isTemplate = false

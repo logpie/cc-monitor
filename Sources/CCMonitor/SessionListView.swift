@@ -8,7 +8,7 @@ struct SessionListView: View {
         return AgentStatus.displayOrder
             .compactMap { status in
                 guard let sessions = grouped[status], !sessions.isEmpty else { return nil }
-                return (status, sessions.sorted { $0.projectName < $1.projectName })
+                return (status, sessions.sorted { $0.lastUpdated > $1.lastUpdated })
             }
     }
 
@@ -62,27 +62,41 @@ struct SessionListView: View {
             }
 
             Divider()
+                .padding(.horizontal, 8)
 
-            HStack {
+            HStack(spacing: 12) {
                 let totalCost = monitor.sessions.reduce(0.0) { $0 + $1.costUsd }
-                Text("\(monitor.sessions.count) session\(monitor.sessions.count == 1 ? "" : "s") · \(formatTotalCost(totalCost))")
+                Text("\(monitor.sessions.count) session\(monitor.sessions.count == 1 ? "" : "s")")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+
+                Text(formatTotalCost(totalCost))
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+
                 Spacer()
-                Button("Usage") {
+
+                Button {
                     NSWorkspace.shared.open(URL(string: "https://claude.ai/settings/usage")!)
+                } label: {
+                    Text("Usage")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
-                .font(.caption)
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                Text("·").foregroundStyle(.quaternary).font(.caption2)
-                Button("Quit") { NSApp.terminate(nil) }
-                    .font(.caption)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+
+                Button {
+                    NSApp.terminate(nil)
+                } label: {
+                    Text("Quit")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
         }
     }
 }

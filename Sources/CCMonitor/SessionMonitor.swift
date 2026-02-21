@@ -57,7 +57,7 @@ final class SessionMonitor: ObservableObject {
     }
 
     private func startPeriodicRefresh() {
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.loadSessionsAsync(checkLiveness: false)
             }
@@ -186,7 +186,7 @@ final class SessionMonitor: ObservableObject {
             }
         }
 
-        sessions.sort { $0.projectName < $1.projectName }
+        sessions.sort { $0.lastUpdated > $1.lastUpdated }
         return LoadResult(sessions: sessions, updatedCache: updatedCache, toDelete: toDelete)
     }
 
