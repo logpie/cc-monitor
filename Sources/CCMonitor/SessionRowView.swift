@@ -65,21 +65,7 @@ struct SessionRowView: View {
                 .padding(.leading, 13)
             }
 
-            // Row 3: model · context bar · cost
-            HStack(spacing: 6) {
-                Text(session.model)
-                    .foregroundStyle(.secondary)
-
-                contextView
-
-                Text(formatCost(session.costUsd))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-            .font(.caption2)
-            .padding(.leading, 13)
-
-            // Row 4: task context (persists across state changes)
+            // Row 3: task context (persists across state changes)
             if let context = session.hookContext, !context.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: contextIcon(for: context))
@@ -94,7 +80,7 @@ struct SessionRowView: View {
                 .padding(.leading, 13)
             }
 
-            // Row 5: last response from Claude
+            // Row 4: last response from Claude
             if let msg = session.lastMessage, !msg.isEmpty {
                 HStack(alignment: .top, spacing: 4) {
                     Image(systemName: "quote.opening")
@@ -109,6 +95,25 @@ struct SessionRowView: View {
                 .foregroundStyle(.tertiary)
                 .padding(.leading, 13)
             }
+
+            // Row 5: model · context bar · cost (always last)
+            HStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.primary)
+                    Text(session.model)
+                        .foregroundStyle(.secondary)
+                }
+
+                contextView
+
+                Text(formatCost(session.costUsd))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption2)
+            .padding(.leading, 13)
         }
         .padding(.vertical, 7)
         .padding(.horizontal, 12)

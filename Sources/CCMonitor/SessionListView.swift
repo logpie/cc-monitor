@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SessionListView: View {
     @ObservedObject var monitor: SessionMonitor
+    var flashAttention: Bool = false
 
     private var groupedSessions: [(status: AgentStatus, sessions: [SessionInfo])] {
         let grouped = Dictionary(grouping: monitor.sessions) { $0.cachedStatus }
@@ -32,8 +33,9 @@ struct SessionListView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 // Section header with accent bar
                                 HStack(spacing: 6) {
+                                    let isFlashing = group.status == .attention && flashAttention
                                     RoundedRectangle(cornerRadius: 1.5)
-                                        .fill(Color(nsColor: group.status.color))
+                                        .fill(Color(nsColor: isFlashing ? .systemRed : group.status.color))
                                         .frame(width: 3, height: 12)
 
                                     Text("\(group.status.sectionTitle) (\(group.sessions.count))")

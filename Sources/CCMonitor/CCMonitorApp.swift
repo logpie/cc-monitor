@@ -24,7 +24,7 @@ struct CCMonitorApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            SessionListView(monitor: monitor)
+            SessionListView(monitor: monitor, flashAttention: flashHidden)
                 .frame(width: 380)
                 .fixedSize(horizontal: false, vertical: true)
         } label: {
