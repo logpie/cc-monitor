@@ -17,6 +17,9 @@ struct CCMonitorApp: App {
     @StateObject private var monitor = SessionMonitor()
     @State private var flashHidden = false
     @State private var flashTimer: Timer?
+    @AppStorage("colorTheme") private var themeRaw = ColorTheme.dracula.rawValue
+
+    private var theme: ColorTheme { ColorTheme(rawValue: themeRaw) ?? .dracula }
 
     private var hasAttention: Bool {
         monitor.sessions.contains { $0.cachedStatus == .attention }
@@ -30,7 +33,8 @@ struct CCMonitorApp: App {
         } label: {
             Image(nsImage: menuBarDotsImage(
                 sessions: monitor.sessions,
-                flashAttention: flashHidden
+                flashAttention: flashHidden,
+                theme: theme
             ))
             .onChange(of: hasAttention) { needsFlash in
                 if needsFlash {
@@ -63,6 +67,7 @@ struct CCMonitorApp: App {
                         }
                     }
                 ))
+
             }
             .padding()
             .frame(width: 250, height: 80)

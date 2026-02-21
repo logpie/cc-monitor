@@ -2,18 +2,13 @@ import SwiftUI
 import AppKit
 
 extension AgentStatus {
-    var color: NSColor {
-        switch self {
-        case .attention:    return .systemOrange
-        case .working:      return .systemBlue
-        case .idle:         return .systemGreen
-        case .disconnected: return .systemGray
-        }
+    func color(for theme: ColorTheme) -> NSColor {
+        theme.statusColor(for: self)
     }
 }
 
 /// Renders pill-shaped status badges in the menu bar
-func menuBarDotsImage(sessions: [SessionInfo], flashAttention: Bool = false) -> NSImage {
+func menuBarDotsImage(sessions: [SessionInfo], flashAttention: Bool = false, theme: ColorTheme) -> NSImage {
     let grouped = Dictionary(grouping: sessions) { $0.cachedStatus }
 
     let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .bold)
@@ -39,7 +34,7 @@ func menuBarDotsImage(sessions: [SessionInfo], flashAttention: Bool = false) -> 
         let pillWidth = textWidth + pillPadH * 2
 
         let dimmed = status == .attention && flashAttention
-        pills.append(Pill(color: status.color, text: text, width: pillWidth, dimmed: dimmed))
+        pills.append(Pill(color: status.color(for: theme), text: text, width: pillWidth, dimmed: dimmed))
     }
 
     if pills.isEmpty {
@@ -57,7 +52,7 @@ func menuBarDotsImage(sessions: [SessionInfo], flashAttention: Bool = false) -> 
             let path = NSBezierPath(roundedRect: rect, xRadius: pillHeight / 2, yRadius: pillHeight / 2)
 
             if pill.dimmed {
-                NSColor.systemRed.withAlphaComponent(0.85).setFill()
+                theme.flashColor.withAlphaComponent(0.85).setFill()
             } else {
                 pill.color.withAlphaComponent(0.85).setFill()
             }

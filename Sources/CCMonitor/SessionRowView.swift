@@ -1,10 +1,24 @@
 import SwiftUI
 import AppKit
 
+extension Color {
+    init(hex: UInt, opacity: Double = 1.0) {
+        self.init(
+            .sRGB,
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255,
+            opacity: opacity
+        )
+    }
+}
+
 struct SessionRowView: View {
     let session: SessionInfo
     @State private var isHovered = false
+    @AppStorage("colorTheme") private var themeRaw = ColorTheme.dracula.rawValue
 
+    private var theme: ColorTheme { ColorTheme(rawValue: themeRaw) ?? .dracula }
     private var status: AgentStatus { session.cachedStatus }
 
     var body: some View {
@@ -12,16 +26,17 @@ struct SessionRowView: View {
             // Row 1: dot + name + path + time
             HStack(spacing: 6) {
                 Circle()
-                    .fill(Color(nsColor: status.color))
+                    .fill(Color(nsColor: status.color(for: theme)))
                     .frame(width: 7, height: 7)
 
                 Text(session.displayLabel)
                     .font(.system(.callout, weight: .medium))
+                    .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
 
                 Text(session.displayPath)
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(theme.tertiaryText)
                     .lineLimit(1)
                     .truncationMode(.head)
 
@@ -29,7 +44,7 @@ struct SessionRowView: View {
 
                 Text(session.relativeTime)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.secondaryText)
                     .monospacedDigit()
                     .frame(minWidth: 28, alignment: .trailing)
             }
@@ -40,24 +55,25 @@ struct SessionRowView: View {
                     HStack(spacing: 2) {
                         Image(systemName: "arrow.triangle.branch")
                             .font(.system(size: 8))
+                            .foregroundStyle(theme.accent)
                         Text(session.gitBranch)
+                            .foregroundStyle(theme.secondaryText)
                     }
-                    .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                     if (session.gitStaged ?? 0) > 0 {
                         Text("+\(session.gitStaged!)")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(theme.gitStaged)
                             .monospacedDigit()
                     }
                     if (session.gitDirty ?? 0) > 0 {
                         Text("~\(session.gitDirty!)")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(theme.gitDirty)
                             .monospacedDigit()
                     }
                     if (session.gitUntracked ?? 0) > 0 {
                         Text("?\(session.gitUntracked!)")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(theme.gitUntracked)
                             .monospacedDigit()
                     }
                 }
@@ -70,7 +86,7 @@ struct SessionRowView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "circle.grid.2x2")
                         .font(.system(size: 9))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(theme.accent)
                     let types = session.activeAgents.map(\.type).joined(separator: ", ")
                     let count = session.activeAgents.count
                     Text("\(count) agent\(count == 1 ? "" : "s"): \(types)")
@@ -78,7 +94,7 @@ struct SessionRowView: View {
                         .truncationMode(.tail)
                 }
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.secondaryText)
                 .padding(.leading, 13)
             }
 
@@ -87,47 +103,47 @@ struct SessionRowView: View {
                 HStack(spacing: 4) {
                     Image(systemName: contextIcon(for: context))
                         .font(.system(size: 9))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(theme.accent)
                     Text(context)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.secondaryText)
                 .padding(.leading, 13)
             }
 
-            // Row 4: last response from Claude
+            // Row 5: last response from Claude
             if let msg = session.lastMessage, !msg.isEmpty {
                 HStack(alignment: .top, spacing: 4) {
                     Image(systemName: "quote.opening")
                         .font(.system(size: 7))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.accent.opacity(0.5))
                         .padding(.top, 2)
                     Text(msg)
                         .lineLimit(2)
                         .truncationMode(.tail)
                 }
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(theme.tertiaryText)
                 .padding(.leading, 13)
             }
 
-            // Row 5: model · context bar · cost (always last)
+            // Row 6: model + context bar + cost (always last)
             HStack(spacing: 6) {
                 HStack(spacing: 4) {
                     Image(systemName: "cpu")
                         .font(.system(size: 9))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(theme.accent)
                     Text(session.model)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                 }
 
                 contextView
 
                 Text(formatCost(session.costUsd))
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.secondaryText)
             }
             .font(.caption2)
             .padding(.leading, 13)
@@ -136,7 +152,7 @@ struct SessionRowView: View {
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color.primary.opacity(0.08) : Color.primary.opacity(0.03))
+                .fill(isHovered ? theme.cardHover : theme.cardBackground)
         )
         .contentShape(Rectangle())
         .onTapGesture {
@@ -155,23 +171,32 @@ struct SessionRowView: View {
     @ViewBuilder
     private var contextView: some View {
         let pct = session.contextUsedPct
-        let color: Color = pct >= 85 ? .red : pct >= 60 ? .orange : .secondary
+        let barColor: Color = pct >= 85
+            ? theme.contextCritical
+            : pct >= 60
+                ? theme.contextWarning
+                : theme.contextHealthy
+        let textColor: Color = pct >= 85
+            ? theme.contextCritical
+            : pct >= 60
+                ? theme.contextWarning
+                : theme.secondaryText
 
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.primary.opacity(0.06))
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(color.opacity(pct >= 60 ? 1.0 : 0.4))
+                    Capsule()
+                        .fill(theme.primaryText.opacity(0.08))
+                    Capsule()
+                        .fill(barColor.opacity(0.85))
                         .frame(width: geo.size.width * min(pct / 100, 1.0))
                 }
             }
-            .frame(width: 36, height: 4)
+            .frame(width: 40, height: 4)
 
             Text("\(Int(pct))%")
                 .monospacedDigit()
-                .foregroundStyle(color)
+                .foregroundStyle(textColor)
         }
     }
 
