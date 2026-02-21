@@ -50,10 +50,23 @@ struct SessionRowView: View {
                     .lineLimit(1)
                 }
 
-                if let gitStatus = session.gitStatusSummary {
-                    Text(gitStatus)
+                // Git status: staged(green) dirty(red) untracked(blue)
+                if (session.gitStaged ?? 0) > 0 {
+                    Text("+\(session.gitStaged!)")
                         .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.green)
+                        .monospacedDigit()
+                }
+                if (session.gitDirty ?? 0) > 0 {
+                    Text("~\(session.gitDirty!)")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .monospacedDigit()
+                }
+                if (session.gitUntracked ?? 0) > 0 {
+                    Text("?\(session.gitUntracked!)")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
                         .monospacedDigit()
                 }
 
