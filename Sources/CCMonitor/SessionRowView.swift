@@ -44,6 +44,17 @@ struct SessionRowView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            TerminalFocuser.focus(session: session)
+        }
+        .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }
 

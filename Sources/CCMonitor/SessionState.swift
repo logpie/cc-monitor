@@ -16,6 +16,8 @@ struct SessionInfo: Identifiable, Codable {
     let contextWindowSize: Int
     let costUsd: Double
     let lastUpdated: TimeInterval
+    let tty: String?
+    let tmuxTarget: String?
 
     var id: String { sessionId }
 
@@ -28,6 +30,8 @@ struct SessionInfo: Identifiable, Codable {
         case contextWindowSize = "context_window_size"
         case costUsd = "cost_usd"
         case lastUpdated = "last_updated"
+        case tty
+        case tmuxTarget = "tmux_target"
     }
 
     /// Derive status from how recently the file was updated
