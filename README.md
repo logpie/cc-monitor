@@ -80,6 +80,18 @@ Add the following to your `~/.claude/settings.json`:
         "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh waiting_permission" }]
       }
     ],
+    "SubagentStart": [
+      {
+        "matcher": ".*",
+        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh subagent_start" }]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": ".*",
+        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh subagent_stop" }]
+      }
+    ],
     "PreCompact": [
       {
         "matcher": ".*",
