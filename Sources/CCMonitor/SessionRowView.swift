@@ -65,7 +65,24 @@ struct SessionRowView: View {
                 .padding(.leading, 13)
             }
 
-            // Row 3: task context (persists across state changes)
+            // Row 3: active subagents
+            if !session.activeAgents.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "circle.grid.2x2")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.primary)
+                    let types = session.activeAgents.map(\.type).joined(separator: ", ")
+                    let count = session.activeAgents.count
+                    Text("\(count) agent\(count == 1 ? "" : "s"): \(types)")
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 13)
+            }
+
+            // Row 4: task context (persists across state changes)
             if let context = session.hookContext, !context.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: contextIcon(for: context))

@@ -59,7 +59,25 @@ echo "$input" | jq -n \
     (if $new_ctx != "" then $new_ctx else ($p.context // "") end) as $ctx |
     (if $new_msg != "" then $new_msg else ($p.last_message // "") end) as $msg |
 
-    {state: $state, context: $ctx, last_message: $msg}
+    # Manage agents array for subagent lifecycle
+    ($p.agents // []) as $prev_agents |
+    (if $state == "subagent_start" then
+        ($in.agent_id // "") as $aid |
+        ($in.agent_type // "") as $atype |
+        if $aid != "" then
+            ($prev_agents | map(select(.id != $aid))) + [{"id": $aid, "type": $atype}]
+        else $prev_agents end
+    elif $state == "subagent_stop" then
+        ($in.agent_id // "") as $aid |
+        if $aid != "" then
+            $prev_agents | map(select(.id != $aid))
+        else $prev_agents end
+    else $prev_agents end) as $agents |
+
+    # For subagent events, keep state as working
+    (if $state == "subagent_start" or $state == "subagent_stop" then "working" else $state end) as $final_state |
+
+    {state: $final_state, context: $ctx, last_message: $msg, agents: $agents}
     ' > "$tmp_file"
 
 mv "$tmp_file" "$state_file"

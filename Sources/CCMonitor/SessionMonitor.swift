@@ -182,6 +182,7 @@ final class SessionMonitor: ObservableObject {
                 session.hookState = hookData.state
                 session.hookContext = hookData.context
                 session.lastMessage = hookData.lastMessage
+                session.activeAgents = hookData.activeAgents
                 sessions.append(session)
             }
         }

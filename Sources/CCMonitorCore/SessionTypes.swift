@@ -108,6 +108,9 @@ public struct SessionInfo: Identifiable, Codable {
     /// Last assistant message (first line, truncated)
     public var lastMessage: String?
 
+    /// Active subagents running in this session
+    public var activeAgents: [ActiveAgent] = []
+
     /// Ghostty tab title resolved via AppleScript
     public var ghosttyTabTitle: String?
 

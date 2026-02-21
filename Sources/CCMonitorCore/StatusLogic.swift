@@ -79,16 +79,29 @@ public func formatRelativeTime(_ age: TimeInterval) -> String {
     return "\(Int(age / 86400))d"
 }
 
+/// A subagent currently running within a session.
+public struct ActiveAgent {
+    public let id: String
+    public let type: String
+
+    public init(id: String, type: String) {
+        self.id = id
+        self.type = type
+    }
+}
+
 /// Parsed hook state file result.
 public struct HookFileData {
     public let state: HookState?
     public let context: String?
     public let lastMessage: String?
+    public let activeAgents: [ActiveAgent]
 
-    public init(state: HookState?, context: String?, lastMessage: String?) {
+    public init(state: HookState?, context: String?, lastMessage: String?, activeAgents: [ActiveAgent] = []) {
         self.state = state
         self.context = context
         self.lastMessage = lastMessage
+        self.activeAgents = activeAgents
     }
 }
 
@@ -106,7 +119,17 @@ public func parseHookStateFile(_ content: String) -> HookFileData {
         let cleanContext = (context?.isEmpty == true) ? nil : context
         let message = json["last_message"] as? String
         let cleanMessage = (message?.isEmpty == true) ? nil : message
-        return HookFileData(state: state, context: cleanContext, lastMessage: cleanMessage)
+
+        var agents: [ActiveAgent] = []
+        if let agentsArray = json["agents"] as? [[String: Any]] {
+            for entry in agentsArray {
+                if let id = entry["id"] as? String, let type = entry["type"] as? String {
+                    agents.append(ActiveAgent(id: id, type: type))
+                }
+            }
+        }
+
+        return HookFileData(state: state, context: cleanContext, lastMessage: cleanMessage, activeAgents: agents)
     }
 
     // Fallback: plain text (backward compat)
