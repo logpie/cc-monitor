@@ -27,7 +27,6 @@ if [ -n "$project_dir" ] && [ -d "$project_dir/.git" ]; then
 fi
 
 # Get TTY for terminal switching
-# The reporter runs as a child of Claude Code, so PPID is the claude process
 claude_pid=${PPID:-0}
 session_tty=$(ps -o tty= -p "$claude_pid" 2>/dev/null | tr -d ' ' || echo "")
 if [ -n "$session_tty" ] && [ "$session_tty" != "??" ]; then
@@ -36,11 +35,26 @@ else
     session_tty=""
 fi
 
-# Check if this session is inside tmux
+# Check if this session is inside tmux and get pane/window info
 tmux_target=""
+tmux_window_name=""
+tmux_pane_title=""
 if [ -n "$session_tty" ] && command -v tmux &>/dev/null; then
-    tmux_target=$(tmux list-panes -a -F '#{pane_tty} #{session_name}:#{window_index}.#{pane_index}' 2>/dev/null \
-        | grep "^${session_tty} " | awk '{print $2}' || echo "")
+    tmux_info=$(tmux list-panes -a -F '#{pane_tty}	#{session_name}:#{window_index}.#{pane_index}	#{window_name}	#{pane_title}' 2>/dev/null \
+        | grep "^${session_tty}	" || echo "")
+    if [ -n "$tmux_info" ]; then
+        tmux_target=$(echo "$tmux_info" | cut -f2)
+        tmux_window_name=$(echo "$tmux_info" | cut -f3)
+        tmux_pane_title=$(echo "$tmux_info" | cut -f4)
+    fi
+fi
+
+# Get terminal tab title (best effort)
+tab_title=""
+if [ -n "$tmux_pane_title" ]; then
+    tab_title="$tmux_pane_title"
+elif [ -n "$tmux_window_name" ]; then
+    tab_title="$tmux_window_name"
 fi
 
 # Current timestamp
@@ -61,6 +75,8 @@ jq -n \
     --argjson ts "$now" \
     --arg tty "$session_tty" \
     --arg tmux "$tmux_target" \
+    --arg tmux_wname "$tmux_window_name" \
+    --arg tab_title "$tab_title" \
     '{
         session_id: $sid,
         project_name: $pname,
@@ -71,7 +87,9 @@ jq -n \
         cost_usd: $cost,
         last_updated: $ts,
         tty: $tty,
-        tmux_target: $tmux
+        tmux_target: $tmux,
+        tmux_window_name: $tmux_wname,
+        tab_title: $tab_title
     }' > "$tmp_file"
 
 mv "$tmp_file" "$out_file"

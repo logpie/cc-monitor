@@ -18,8 +18,22 @@ struct SessionInfo: Identifiable, Codable {
     let lastUpdated: TimeInterval
     let tty: String?
     let tmuxTarget: String?
+    let tmuxWindowName: String?
+    let tabTitle: String?
 
     var id: String { sessionId }
+
+    /// Display label: tab title if available, else tmux window name, else project name
+    var displayLabel: String {
+        if let t = tabTitle, !t.isEmpty { return t }
+        if let w = tmuxWindowName, !w.isEmpty { return w }
+        return projectName
+    }
+
+    /// Subtitle: project directory path
+    var displaySubtitle: String {
+        return projectName
+    }
 
     enum CodingKeys: String, CodingKey {
         case sessionId = "session_id"
@@ -32,6 +46,8 @@ struct SessionInfo: Identifiable, Codable {
         case lastUpdated = "last_updated"
         case tty
         case tmuxTarget = "tmux_target"
+        case tmuxWindowName = "tmux_window_name"
+        case tabTitle = "tab_title"
     }
 
     /// Derive status from how recently the file was updated

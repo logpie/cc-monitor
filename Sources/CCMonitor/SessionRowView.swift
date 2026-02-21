@@ -17,12 +17,20 @@ struct SessionRowView: View {
                     .modifier(PulseModifier(isActive: status == .error))
 
                 HStack(spacing: 4) {
-                    Text(session.projectName)
+                    Text(session.displayLabel)
                         .font(.system(.body, weight: .semibold))
-                    if !session.gitBranch.isEmpty {
-                        Text("(\(session.gitBranch))")
+                        .lineLimit(1)
+                    if session.displayLabel != session.projectName {
+                        Text("(\(session.projectName))")
                             .font(.callout)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    if !session.gitBranch.isEmpty {
+                        Text("[\(session.gitBranch)]")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
 
