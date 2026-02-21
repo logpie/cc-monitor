@@ -25,7 +25,8 @@ struct CCMonitorApp: App {
     var body: some Scene {
         MenuBarExtra {
             SessionListView(monitor: monitor)
-                .frame(minWidth: 380, maxWidth: 380, minHeight: 100, maxHeight: 600)
+                .frame(width: 380)
+                .fixedSize(horizontal: false, vertical: true)
         } label: {
             Image(nsImage: menuBarDotsImage(
                 sessions: monitor.sessions,

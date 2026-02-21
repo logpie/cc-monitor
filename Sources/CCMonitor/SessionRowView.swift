@@ -8,7 +8,7 @@ struct SessionRowView: View {
     private var status: AgentStatus { session.cachedStatus }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             // Row 1: status dot + name + spacer + status badge + time
             HStack(spacing: 6) {
                 Circle()
@@ -32,7 +32,7 @@ struct SessionRowView: View {
 
                 Text(session.relativeTime)
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .frame(minWidth: 28, alignment: .trailing)
             }
@@ -72,7 +72,7 @@ struct SessionRowView: View {
 
                 Text(session.displayPath)
                     .font(.caption2)
-                    .foregroundStyle(.quaternary)
+                    .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.head)
             }
@@ -96,8 +96,8 @@ struct SessionRowView: View {
             if let context = session.hookContext, !context.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: contextIcon(for: context))
-                        .font(.system(size: 8))
-                        .foregroundStyle(.quaternary)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.primary)
                     Text(context)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -112,7 +112,7 @@ struct SessionRowView: View {
                 HStack(alignment: .top, spacing: 4) {
                     Image(systemName: "quote.opening")
                         .font(.system(size: 7))
-                        .foregroundStyle(.quaternary)
+                        .foregroundStyle(.secondary)
                         .padding(.top, 2)
                     Text(msg)
                         .lineLimit(2)
@@ -123,7 +123,7 @@ struct SessionRowView: View {
                 .padding(.leading, 13)
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 7)
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 8)

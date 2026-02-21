@@ -27,7 +27,7 @@ struct SessionListView: View {
                 .padding(.vertical, 32)
             } else {
                 ScrollView {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 8) {
                         ForEach(groupedSessions, id: \.status) { group in
                             VStack(alignment: .leading, spacing: 4) {
                                 // Section header with accent bar
@@ -46,7 +46,7 @@ struct SessionListView: View {
                                 .padding(.bottom, 2)
 
                                 // Session cards
-                                VStack(spacing: 4) {
+                                VStack(spacing: 3) {
                                     ForEach(group.sessions) { session in
                                         SessionRowView(session: session)
                                             .id("\(session.cachedStatus.rawValue)-\(session.id)")
