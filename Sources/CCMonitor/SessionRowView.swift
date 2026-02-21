@@ -9,7 +9,7 @@ struct SessionRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Row 1: status dot + name + spacer + status badge + time
+            // Row 1: dot + name + path + time
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color(nsColor: status.color))
@@ -19,16 +19,13 @@ struct SessionRowView: View {
                     .font(.system(.callout, weight: .medium))
                     .lineLimit(1)
 
-                Spacer(minLength: 4)
-
-                Text(session.detailedStatusText)
+                Text(session.displayPath)
                     .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color(nsColor: status.color))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color(nsColor: status.color).opacity(0.12))
-                    .cornerRadius(3)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+
+                Spacer(minLength: 4)
 
                 Text(session.relativeTime)
                     .font(.caption2)
@@ -37,46 +34,36 @@ struct SessionRowView: View {
                     .frame(minWidth: 28, alignment: .trailing)
             }
 
-            // Row 2: branch + git status + path
-            HStack(spacing: 6) {
-                if !session.gitBranch.isEmpty {
+            // Row 2: branch + git status
+            if !session.gitBranch.isEmpty {
+                HStack(spacing: 6) {
                     HStack(spacing: 2) {
                         Image(systemName: "arrow.triangle.branch")
                             .font(.system(size: 8))
                         Text(session.gitBranch)
                     }
-                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                }
 
-                // Git status: staged(green) dirty(red) untracked(blue)
-                if (session.gitStaged ?? 0) > 0 {
-                    Text("+\(session.gitStaged!)")
-                        .font(.caption2)
-                        .foregroundStyle(.green)
-                        .monospacedDigit()
+                    if (session.gitStaged ?? 0) > 0 {
+                        Text("+\(session.gitStaged!)")
+                            .foregroundStyle(.green)
+                            .monospacedDigit()
+                    }
+                    if (session.gitDirty ?? 0) > 0 {
+                        Text("~\(session.gitDirty!)")
+                            .foregroundStyle(.red)
+                            .monospacedDigit()
+                    }
+                    if (session.gitUntracked ?? 0) > 0 {
+                        Text("?\(session.gitUntracked!)")
+                            .foregroundStyle(.blue)
+                            .monospacedDigit()
+                    }
                 }
-                if (session.gitDirty ?? 0) > 0 {
-                    Text("~\(session.gitDirty!)")
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                        .monospacedDigit()
-                }
-                if (session.gitUntracked ?? 0) > 0 {
-                    Text("?\(session.gitUntracked!)")
-                        .font(.caption2)
-                        .foregroundStyle(.blue)
-                        .monospacedDigit()
-                }
-
-                Text(session.displayPath)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.head)
+                .font(.caption2)
+                .padding(.leading, 13)
             }
-            .padding(.leading, 13)
 
             // Row 3: model · context bar · cost
             HStack(spacing: 6) {
