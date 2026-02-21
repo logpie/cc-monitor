@@ -25,7 +25,7 @@ git_branch=""
 git_dirty=0
 git_staged=0
 git_untracked=0
-if [ -n "$project_dir" ] && [ -d "$project_dir/.git" ]; then
+if [ -n "$project_dir" ] && git -C "$project_dir" rev-parse --is-inside-work-tree &>/dev/null; then
     git_branch=$(git -C "$project_dir" branch --show-current 2>/dev/null || echo "")
     # Porcelain v1: first char = staged, second char = unstaged, ? = untracked
     while IFS= read -r line; do
