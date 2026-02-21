@@ -13,7 +13,7 @@ input=$(cat)
 session_id=$(echo "$input" | jq -r '.session_id // empty')
 [ -z "$session_id" ] && exit 0
 
-project_dir=$(echo "$input" | jq -r '.workspace.project_dir // .cwd // empty')
+project_dir=$(echo "$input" | jq -r '.cwd // .workspace.project_dir // empty')
 project_name=$(basename "$project_dir")
 model=$(echo "$input" | jq -r '.model.display_name // "unknown"')
 context_pct=$(echo "$input" | jq -r '.context_window.used_percentage // 0')
@@ -65,11 +65,12 @@ fi
 
 # Get terminal tab title (best effort)
 tab_title=""
-if [ -n "$tmux_pane_title" ]; then
+if [ -n "$tmux_pane_title" ] && [ "$tmux_pane_title" != "%self" ]; then
     tab_title="$tmux_pane_title"
 elif [ -n "$tmux_window_name" ]; then
     tab_title="$tmux_window_name"
 fi
+
 
 # Current timestamp
 now=$(date +%s)

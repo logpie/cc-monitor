@@ -15,13 +15,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 struct CCMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var monitor = SessionMonitor()
+    @State private var flashHidden = false
+    @State private var flashTimer: Timer?
+
+    private var hasAttention: Bool {
+        monitor.sessions.contains { $0.cachedStatus == .attention }
+    }
 
     var body: some Scene {
         MenuBarExtra {
             SessionListView(monitor: monitor)
                 .frame(minWidth: 380, maxWidth: 380, minHeight: 100, maxHeight: 600)
         } label: {
-            Image(nsImage: menuBarDotsImage(sessions: monitor.sessions))
+            Image(nsImage: menuBarDotsImage(
+                sessions: monitor.sessions,
+                flashAttention: flashHidden
+            ))
+            .onChange(of: hasAttention) { needsFlash in
+                if needsFlash {
+                    flashTimer?.invalidate()
+                    flashTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { _ in
+                        Task { @MainActor in flashHidden.toggle() }
+                    }
+                } else {
+                    flashTimer?.invalidate()
+                    flashTimer = nil
+                    flashHidden = false
+                }
+            }
         }
         .menuBarExtraStyle(.window)
 

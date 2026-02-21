@@ -14,7 +14,7 @@ extension AgentStatus {
 }
 
 /// Renders colored dots with counts for non-zero statuses
-func menuBarDotsImage(sessions: [SessionInfo]) -> NSImage {
+func menuBarDotsImage(sessions: [SessionInfo], flashAttention: Bool = false) -> NSImage {
     let grouped = Dictionary(grouping: sessions) { $0.cachedStatus }
 
     let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
@@ -30,6 +30,8 @@ func menuBarDotsImage(sessions: [SessionInfo]) -> NSImage {
         let count = grouped[status]?.count ?? 0
         // Always show attention if > 0, always show working/idle, skip disconnected if 0
         if count == 0 && (status == .attention || status == .disconnected) { continue }
+        // Flash: hide the attention dot on the "off" beat
+        if status == .attention && flashAttention { continue }
         let text = "\(count)"
         let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
         segments.append((status.color, text, textWidth))

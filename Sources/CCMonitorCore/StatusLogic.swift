@@ -79,12 +79,24 @@ public func formatRelativeTime(_ age: TimeInterval) -> String {
     return "\(Int(age / 86400))d"
 }
 
+/// Parsed hook state file result.
+public struct HookFileData {
+    public let state: HookState?
+    public let context: String?
+    public let lastMessage: String?
+
+    public init(state: HookState?, context: String?, lastMessage: String?) {
+        self.state = state
+        self.context = context
+        self.lastMessage = lastMessage
+    }
+}
+
 /// Parse a hook state file (JSON or plain text fallback).
-/// Returns (state, context) tuple.
-public func parseHookStateFile(_ content: String) -> (state: HookState?, context: String?) {
+public func parseHookStateFile(_ content: String) -> HookFileData {
     let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    // Try JSON format first: {"state":"working","context":"Edit file.swift"}
+    // Try JSON format first
     if trimmed.hasPrefix("{"),
        let data = trimmed.data(using: .utf8),
        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -92,9 +104,11 @@ public func parseHookStateFile(_ content: String) -> (state: HookState?, context
         let state = HookState(rawValue: stateStr)
         let context = json["context"] as? String
         let cleanContext = (context?.isEmpty == true) ? nil : context
-        return (state, cleanContext)
+        let message = json["last_message"] as? String
+        let cleanMessage = (message?.isEmpty == true) ? nil : message
+        return HookFileData(state: state, context: cleanContext, lastMessage: cleanMessage)
     }
 
     // Fallback: plain text (backward compat)
-    return (HookState(rawValue: trimmed), nil)
+    return HookFileData(state: HookState(rawValue: trimmed), context: nil, lastMessage: nil)
 }

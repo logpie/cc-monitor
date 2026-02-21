@@ -15,7 +15,7 @@ struct SessionRowView: View {
                     .fill(Color(nsColor: status.color))
                     .frame(width: 7, height: 7)
 
-                Text(session.projectName)
+                Text(session.displayLabel)
                     .font(.system(.callout, weight: .medium))
                     .lineLimit(1)
 
@@ -93,6 +93,21 @@ struct SessionRowView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .padding(.leading, 14)
+            }
+
+            // Line 4: last response from Claude
+            if let msg = session.lastMessage, !msg.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "bubble.left")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                    Text(msg)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+                .font(.caption)
+                .foregroundStyle(.tertiary)
                 .padding(.leading, 14)
             }
         }

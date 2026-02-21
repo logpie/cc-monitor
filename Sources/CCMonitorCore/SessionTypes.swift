@@ -43,6 +43,7 @@ public struct SessionInfo: Identifiable, Codable {
     public var id: String { sessionId }
 
     public var displayLabel: String {
+        if let t = ghosttyTabTitle, !t.isEmpty { return t }
         if let t = tabTitle, !t.isEmpty { return t }
         if let w = tmuxWindowName, !w.isEmpty { return w }
         return projectName
@@ -103,6 +104,12 @@ public struct SessionInfo: Identifiable, Codable {
 
     /// Task context from hook (e.g. "Edit StatusDot.swift", "$ npm test")
     public var hookContext: String?
+
+    /// Last assistant message (first line, truncated)
+    public var lastMessage: String?
+
+    /// Ghostty tab title resolved via AppleScript
+    public var ghosttyTabTitle: String?
 
     /// Specific status text based on actual hook state
     public var detailedStatusText: String {
