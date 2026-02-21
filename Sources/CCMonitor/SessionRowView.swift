@@ -3,60 +3,77 @@ import AppKit
 
 struct SessionRowView: View {
     let session: SessionInfo
-    let now: Date
+    @State private var isHovered = false
 
-    private var status: AgentStatus { session.status(now: now) }
+    private var status: AgentStatus { session.cachedStatus }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Top line: dot + project (branch) + status
-            HStack {
+        VStack(alignment: .leading, spacing: 3) {
+            // Line 1: dot + name (+ branch) + status
+            HStack(spacing: 6) {
                 Circle()
                     .fill(Color(nsColor: status.color))
-                    .frame(width: 10, height: 10)
-                    .modifier(PulseModifier(isActive: status == .error))
+                    .frame(width: 8, height: 8)
 
-                HStack(spacing: 4) {
-                    Text(session.displayLabel)
-                        .font(.system(.body, weight: .semibold))
+                Text(session.displayLabel)
+                    .font(.system(.body, weight: .medium))
+                    .lineLimit(1)
+
+                if session.displayLabel != session.projectName {
+                    Text(session.projectName)
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
-                    if session.displayLabel != session.projectName {
-                        Text("(\(session.projectName))")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    if !session.gitBranch.isEmpty {
-                        Text("[\(session.gitBranch)]")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                }
+
+                if !session.gitBranch.isEmpty {
+                    Text(session.gitBranch)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.primary.opacity(0.06))
+                        .cornerRadius(3)
+                        .lineLimit(1)
                 }
 
                 Spacer()
 
-                Text(status.displayText)
-                    .font(.callout)
-                    .foregroundStyle(status == .waiting ? .red : .secondary)
-            }
-
-            // Bottom line: context bar + model
-            HStack(spacing: 12) {
-                ContextBar(percentage: session.contextUsedPct)
-                Text(session.model)
+                Text(session.detailedStatusText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .padding(.leading, 22)
+
+            // Line 2: model · context · cost
+            HStack(spacing: 0) {
+                Text(session.model)
+                    .foregroundStyle(.secondary)
+
+                Text("  ·  ")
+                    .foregroundStyle(.quaternary)
+
+                contextView
+
+                Text("  ·  ")
+                    .foregroundStyle(.quaternary)
+
+                Text(formatCost(session.costUsd))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+            .padding(.leading, 14)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
+        .background(isHovered ? Color.primary.opacity(0.06) : Color.clear)
+        .cornerRadius(6)
         .contentShape(Rectangle())
         .onTapGesture {
             TerminalFocuser.focus(session: session)
         }
         .onHover { hovering in
+            isHovered = hovering
             if hovering {
                 NSCursor.pointingHand.push()
             } else {
@@ -64,33 +81,38 @@ struct SessionRowView: View {
             }
         }
     }
-}
 
-extension AgentStatus {
-    var displayText: String {
-        switch self {
-        case .working:  return "Working..."
-        case .waiting:  return "Waiting for input"
-        case .idle:     return "Idle"
-        case .error:    return "Disconnected"
+    @ViewBuilder
+    private var contextView: some View {
+        let pct = session.contextUsedPct
+        let color: Color = pct >= 85 ? .red : pct >= 60 ? .orange : .secondary
+
+        HStack(spacing: 3) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(Color.primary.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(color.opacity(pct >= 60 ? 1.0 : 0.5))
+                        .frame(width: geo.size.width * min(pct / 100, 1.0))
+                }
+            }
+            .frame(width: 40, height: 4)
+
+            Text("\(Int(pct))%")
+                .monospacedDigit()
+                .foregroundStyle(color)
+        }
+    }
+
+    private func formatCost(_ cost: Double) -> String {
+        if cost >= 100 {
+            return "$\(Int(cost))"
+        } else if cost >= 10 {
+            return String(format: "$%.1f", cost)
+        } else {
+            return String(format: "$%.2f", cost)
         }
     }
 }
 
-struct PulseModifier: ViewModifier {
-    let isActive: Bool
-    @State private var isPulsing = false
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(isActive ? (isPulsing ? 0.3 : 1.0) : 1.0)
-            .animation(
-                isActive
-                    ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
-                    : .default,
-                value: isPulsing
-            )
-            .onAppear { if isActive { isPulsing = true } }
-            .onChange(of: isActive) { newValue in isPulsing = newValue }
-    }
-}

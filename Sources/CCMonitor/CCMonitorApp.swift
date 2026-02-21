@@ -3,8 +3,11 @@ import ServiceManagement
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Hide from Dock (no Info.plist in SPM)
         NSApp.setActivationPolicy(.accessory)
+
+        // Prompt for Accessibility permissions (needed for tab clicking)
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
+        AXIsProcessTrustedWithOptions(options)
     }
 }
 

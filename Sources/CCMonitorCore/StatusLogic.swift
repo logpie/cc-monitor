@@ -1,0 +1,71 @@
+import Foundation
+
+/// Fallback working threshold (only used when hook state is unavailable).
+public let workingThresholdSeconds: TimeInterval = 3
+
+/// Seconds after last report before we check process liveness.
+public let livenessCheckThresholdSeconds: TimeInterval = 5
+
+/// Seconds after which dead sessions' files are cleaned up.
+public let deadCleanupThresholdSeconds: TimeInterval = 300
+
+/// Hook states written by monitor-hook.sh
+public enum HookState: String {
+    case working
+    case idle
+    case waitingPermission = "waiting_permission"
+    case waitingInput = "waiting_input"
+    case compacting
+}
+
+/// Compute status from hook state (preferred) or fall back to time-based.
+public func computeStatus(hookState: HookState?, age: TimeInterval, processAlive: Bool) -> AgentStatus {
+    // If process is dead, always disconnected
+    if !processAlive && age > livenessCheckThresholdSeconds {
+        return .disconnected
+    }
+
+    // If we have a hook state, use it directly
+    if let hook = hookState {
+        switch hook {
+        case .working, .compacting:
+            return .working
+        case .waitingPermission, .waitingInput:
+            return .attention
+        case .idle:
+            return .idle
+        }
+    }
+
+    // Fallback: time-based (for sessions without hooks)
+    if age <= workingThresholdSeconds { return .working }
+    if processAlive { return .idle }
+    return .disconnected
+}
+
+/// Legacy: compute without hook state (for tests and fallback).
+public func computeStatus(age: TimeInterval, processAlive: Bool) -> AgentStatus {
+    return computeStatus(hookState: nil, age: age, processAlive: processAlive)
+}
+
+/// Determine what action to take for a session file given its age and liveness.
+public enum SessionAction {
+    case keep(AgentStatus)
+    case delete
+}
+
+public func sessionAction(hookState: HookState?, age: TimeInterval, processAlive: Bool) -> SessionAction {
+    if !processAlive && age > deadCleanupThresholdSeconds {
+        return .delete
+    }
+    return .keep(computeStatus(hookState: hookState, age: age, processAlive: processAlive))
+}
+
+public func sessionAction(age: TimeInterval, processAlive: Bool) -> SessionAction {
+    return sessionAction(hookState: nil, age: age, processAlive: processAlive)
+}
+
+/// Whether liveness should be checked for the given age.
+public func shouldCheckLiveness(age: TimeInterval) -> Bool {
+    return age > livenessCheckThresholdSeconds
+}

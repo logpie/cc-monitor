@@ -89,7 +89,9 @@ jq -n \
         tty: $tty,
         tmux_target: $tmux,
         tmux_window_name: $tmux_wname,
-        tab_title: $tab_title
+        tab_title: $tab_title,
+        ghostty_window: "",
+        ghostty_tab: ""
     }' > "$tmp_file"
 
 mv "$tmp_file" "$out_file"
