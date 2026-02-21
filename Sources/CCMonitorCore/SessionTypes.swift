@@ -74,6 +74,9 @@ public struct SessionInfo: Identifiable, Codable {
     /// Raw hook state for detailed display text
     public var hookState: HookState?
 
+    /// Task context from hook (e.g. "Edit StatusDot.swift", "$ npm test")
+    public var hookContext: String?
+
     /// Specific status text based on actual hook state
     public var detailedStatusText: String {
         if let hook = hookState {
@@ -86,6 +89,12 @@ public struct SessionInfo: Identifiable, Codable {
             }
         }
         return cachedStatus.displayLabel
+    }
+
+    /// Relative time since last update (e.g. "just now", "2m", "1h")
+    public var relativeTime: String {
+        let age = Date().timeIntervalSince1970 - lastUpdated
+        return formatRelativeTime(age)
     }
 
     public var contextTier: ContextTier {

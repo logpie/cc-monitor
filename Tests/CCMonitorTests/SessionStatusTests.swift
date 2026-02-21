@@ -106,6 +106,55 @@ check(order[2] == .idle, "idle third")
 check(order[3] == .disconnected, "disconnected last")
 
 // ============================================================
+section("Relative time formatting")
+check(formatRelativeTime(0) == "just now", "age=0 → just now")
+check(formatRelativeTime(5) == "just now", "age=5 → just now")
+check(formatRelativeTime(9.9) == "just now", "age=9.9 → just now")
+check(formatRelativeTime(10) == "10s", "age=10 → 10s")
+check(formatRelativeTime(45) == "45s", "age=45 → 45s")
+check(formatRelativeTime(59) == "59s", "age=59 → 59s")
+check(formatRelativeTime(60) == "1m", "age=60 → 1m")
+check(formatRelativeTime(150) == "2m", "age=150 → 2m")
+check(formatRelativeTime(3599) == "59m", "age=3599 → 59m")
+check(formatRelativeTime(3600) == "1h", "age=3600 → 1h")
+check(formatRelativeTime(7200) == "2h", "age=7200 → 2h")
+check(formatRelativeTime(86400) == "1d", "age=86400 → 1d")
+
+// ============================================================
+section("JSON state file parsing")
+do {
+    // JSON with context
+    let (state1, ctx1) = parseHookStateFile(#"{"state":"working","context":"Edit file.swift"}"#)
+    check(state1 == .working, "JSON working state")
+    check(ctx1 == "Edit file.swift", "JSON context extracted")
+
+    // JSON without context
+    let (state2, ctx2) = parseHookStateFile(#"{"state":"idle","context":""}"#)
+    check(state2 == .idle, "JSON idle state")
+    check(ctx2 == nil, "empty context → nil")
+
+    // JSON with no context key
+    let (state3, ctx3) = parseHookStateFile(#"{"state":"compacting"}"#)
+    check(state3 == .compacting, "JSON compacting state")
+    check(ctx3 == nil, "missing context → nil")
+
+    // Plain text fallback
+    let (state4, ctx4) = parseHookStateFile("working\n")
+    check(state4 == .working, "plain text working")
+    check(ctx4 == nil, "plain text no context")
+
+    // Plain text unknown
+    let (state5, ctx5) = parseHookStateFile("garbage")
+    check(state5 == nil, "plain text garbage → nil")
+    check(ctx5 == nil, "plain text garbage no context")
+
+    // JSON waiting_permission with context
+    let (state6, ctx6) = parseHookStateFile(#"{"state":"waiting_permission","context":"$ rm -rf /"}"#)
+    check(state6 == .waitingPermission, "JSON waiting_permission")
+    check(ctx6 == "$ rm -rf /", "JSON permission context")
+}
+
+// ============================================================
 print("")
 if failed == 0 { print("All \(passed) tests passed.") }
 else { print("\(failed) FAILED, \(passed) passed."); exit(1) }

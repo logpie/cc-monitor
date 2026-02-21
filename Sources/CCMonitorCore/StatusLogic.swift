@@ -69,3 +69,32 @@ public func sessionAction(age: TimeInterval, processAlive: Bool) -> SessionActio
 public func shouldCheckLiveness(age: TimeInterval) -> Bool {
     return age > livenessCheckThresholdSeconds
 }
+
+/// Format age as relative time string (pure function for testing).
+public func formatRelativeTime(_ age: TimeInterval) -> String {
+    if age < 10 { return "just now" }
+    if age < 60 { return "\(Int(age))s" }
+    if age < 3600 { return "\(Int(age / 60))m" }
+    if age < 86400 { return "\(Int(age / 3600))h" }
+    return "\(Int(age / 86400))d"
+}
+
+/// Parse a hook state file (JSON or plain text fallback).
+/// Returns (state, context) tuple.
+public func parseHookStateFile(_ content: String) -> (state: HookState?, context: String?) {
+    let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    // Try JSON format first: {"state":"working","context":"Edit file.swift"}
+    if trimmed.hasPrefix("{"),
+       let data = trimmed.data(using: .utf8),
+       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+       let stateStr = json["state"] as? String {
+        let state = HookState(rawValue: stateStr)
+        let context = json["context"] as? String
+        let cleanContext = (context?.isEmpty == true) ? nil : context
+        return (state, cleanContext)
+    }
+
+    // Fallback: plain text (backward compat)
+    return (HookState(rawValue: trimmed), nil)
+}

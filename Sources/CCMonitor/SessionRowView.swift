@@ -8,8 +8,8 @@ struct SessionRowView: View {
     private var status: AgentStatus { session.cachedStatus }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            // Line 1: dot + name (+ branch) + status
+        VStack(alignment: .leading, spacing: 4) {
+            // Line 1: dot + name + branch + status + relative time
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color(nsColor: status.color))
@@ -42,9 +42,14 @@ struct SessionRowView: View {
                 Text(session.detailedStatusText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Text(session.relativeTime)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
             }
 
-            // Line 2: model · context · cost
+            // Line 2: model · context bar · cost
             HStack(spacing: 0) {
                 Text(session.model)
                     .foregroundStyle(.secondary)
@@ -63,11 +68,28 @@ struct SessionRowView: View {
             }
             .font(.caption)
             .padding(.leading, 14)
+
+            // Line 3: task context (only if available)
+            if let context = session.hookContext, !context.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: contextIcon(for: context))
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                    Text(context)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 14)
+            }
         }
         .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(isHovered ? Color.primary.opacity(0.06) : Color.clear)
-        .cornerRadius(6)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovered ? Color.primary.opacity(0.08) : Color.primary.opacity(0.03))
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             TerminalFocuser.focus(session: session)
@@ -105,6 +127,16 @@ struct SessionRowView: View {
         }
     }
 
+    private func contextIcon(for context: String) -> String {
+        if context.hasPrefix("Edit") || context.hasPrefix("Write") { return "pencil" }
+        if context.hasPrefix("Read") { return "doc.text" }
+        if context.hasPrefix("$") { return "terminal" }
+        if context.hasPrefix("Search") { return "magnifyingglass" }
+        if context.hasPrefix("Agent") { return "person.2" }
+        if context.contains("web") || context.contains("Web") || context.contains("Fetch") { return "globe" }
+        return "gearshape"
+    }
+
     private func formatCost(_ cost: Double) -> String {
         if cost >= 100 {
             return "$\(Int(cost))"
@@ -115,4 +147,3 @@ struct SessionRowView: View {
         }
     }
 }
-

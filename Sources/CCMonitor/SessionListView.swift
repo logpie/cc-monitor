@@ -27,30 +27,36 @@ struct SessionListView: View {
                 .padding(.vertical, 32)
             } else {
                 ScrollView {
-                    VStack(spacing: 0) {
+                    VStack(spacing: 12) {
                         ForEach(groupedSessions, id: \.status) { group in
-                            // Section header
-                            HStack(spacing: 5) {
-                                Circle()
-                                    .fill(Color(nsColor: group.status.color))
-                                    .frame(width: 6, height: 6)
-                                Text("\(group.status.sectionTitle) (\(group.sessions.count))")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.secondary)
-                                    .textCase(.uppercase)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.top, 10)
-                            .padding(.bottom, 4)
+                            VStack(alignment: .leading, spacing: 4) {
+                                // Section header with accent bar
+                                HStack(spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 1.5)
+                                        .fill(Color(nsColor: group.status.color))
+                                        .frame(width: 3, height: 12)
 
-                            ForEach(group.sessions) { session in
-                                SessionRowView(session: session)
-                                    .id("\(session.cachedStatus.rawValue)-\(session.id)")
+                                    Text("\(group.status.sectionTitle) (\(group.sessions.count))")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.secondary)
+                                        .textCase(.uppercase)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.bottom, 2)
+
+                                // Session cards
+                                VStack(spacing: 4) {
+                                    ForEach(group.sessions) { session in
+                                        SessionRowView(session: session)
+                                            .id("\(session.cachedStatus.rawValue)-\(session.id)")
+                                    }
+                                }
+                                .padding(.horizontal, 6)
                             }
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 8)
                 }
                 .onAppear { monitor.loadSessions(checkLiveness: false) }
             }

@@ -136,7 +136,7 @@ final class SessionMonitor: ObservableObject {
                 }
             }
 
-            let hookState = readHookState(dir: dir, sessionId: session.sessionId)
+            let (hookState, hookContext) = readHookState(dir: dir, sessionId: session.sessionId)
 
             switch sessionAction(hookState: hookState, age: age, processAlive: session.processAlive) {
             case .delete:
@@ -147,6 +147,7 @@ final class SessionMonitor: ObservableObject {
             case .keep(let status):
                 session.cachedStatus = status
                 session.hookState = hookState
+                session.hookContext = hookContext
                 sessions.append(session)
             }
         }
@@ -155,12 +156,12 @@ final class SessionMonitor: ObservableObject {
         return LoadResult(sessions: sessions, updatedCache: updatedCache, toDelete: toDelete)
     }
 
-    private nonisolated static func readHookState(dir: URL, sessionId: String) -> HookState? {
+    private nonisolated static func readHookState(dir: URL, sessionId: String) -> (HookState?, String?) {
         let stateFile = dir.appendingPathComponent(".\(sessionId).state")
         guard let content = try? String(contentsOf: stateFile, encoding: .utf8) else {
-            return nil
+            return (nil, nil)
         }
-        return HookState(rawValue: content.trimmingCharacters(in: .whitespacesAndNewlines))
+        return parseHookStateFile(content)
     }
 
     private nonisolated static func isClaudeAlive(on tty: String?) -> Bool {
