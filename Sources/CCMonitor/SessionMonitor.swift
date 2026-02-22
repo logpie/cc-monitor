@@ -5,6 +5,7 @@ import CCMonitorCore
 @MainActor
 final class SessionMonitor: ObservableObject {
     @Published var sessions: [SessionInfo] = []
+    @Published var healthIssueCount: Int = 0
 
     private let monitorDir: URL
     private var dirSource: DispatchSourceFileSystemObject?
@@ -34,6 +35,7 @@ final class SessionMonitor: ObservableObject {
         startPeriodicRefresh()
         startLivenessCheck()
         loadSessionsAsync(checkLiveness: true)
+        checkHealth()
     }
 
     deinit {
@@ -74,6 +76,18 @@ final class SessionMonitor: ObservableObject {
         livenessTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.loadSessionsAsync(checkLiveness: true)
+            }
+        }
+    }
+
+    /// Run fast diagnostic checks on the IO queue and update healthIssueCount.
+    private func checkHealth() {
+        ioQueue.async { [weak self] in
+            let engine = DiagnosticEngine()
+            let report = engine.runFastChecks()
+            let count = report.failCount + report.warnCount
+            Task { @MainActor [weak self] in
+                self?.healthIssueCount = count
             }
         }
     }

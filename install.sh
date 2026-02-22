@@ -47,6 +47,7 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp .build/release/CCMonitor "$MACOS_DIR/$APP_NAME"
+cp .build/release/CCMonitorDoctor "$MACOS_DIR/CCMonitorDoctor"
 
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -80,8 +81,17 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 PLIST
 
 cp resources/AppIcon.icns "$RESOURCES_DIR/AppIcon.icns"
+cp reporter/monitor-hook.sh "$RESOURCES_DIR/monitor-hook.sh"
+cp reporter/monitor-reporter.sh "$RESOURCES_DIR/monitor-reporter.sh"
 codesign --force --sign - "$APP_DIR"
 info "Installed: $APP_DIR"
+
+# --- Symlink cc-monitor-doctor to PATH ---
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+ln -sf "$MACOS_DIR/CCMonitorDoctor" "$BIN_DIR/cc-monitor-doctor"
+info "Symlinked: ~/.local/bin/cc-monitor-doctor → app bundle"
+info "Ensure ~/.local/bin is in your PATH"
 
 # --- Install hook scripts ---
 echo "Installing hook scripts..."

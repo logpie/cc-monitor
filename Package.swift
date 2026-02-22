@@ -15,6 +15,11 @@ let package = Package(
             path: "Sources/CCMonitor"
         ),
         .executableTarget(
+            name: "CCMonitorDoctor",
+            dependencies: ["CCMonitorCore"],
+            path: "Sources/CCMonitorDoctor"
+        ),
+        .executableTarget(
             name: "CCMonitorTests",
             dependencies: ["CCMonitorCore"],
             path: "Tests/CCMonitorTests"

@@ -8,6 +8,7 @@ struct SessionListView: View {
     @AppStorage("panelOpacity") private var panelOpacity = 0.82
     @State private var showThemePicker = false
     @State private var showSettings = false
+    @State private var showHealthPopover = false
 
     private var theme: ColorTheme { ColorTheme(rawValue: themeRaw) ?? .dracula }
 
@@ -89,6 +90,40 @@ struct SessionListView: View {
                     .font(.caption2)
                     .monospacedDigit()
                     .foregroundStyle(theme.tertiaryText)
+
+                if monitor.healthIssueCount > 0 {
+                    Button {
+                        showHealthPopover.toggle()
+                    } label: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.yellow)
+                    }
+                    .buttonStyle(.plain)
+                    .help("CC Monitor has \(monitor.healthIssueCount) issue(s). Run: cc-monitor-doctor")
+                    .popover(isPresented: $showHealthPopover, arrowEdge: .top) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.yellow)
+                                    .font(.system(size: 11))
+                                Text("\(monitor.healthIssueCount) issue\(monitor.healthIssueCount == 1 ? "" : "s") detected")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(theme.primaryText)
+                            }
+                            Text("Run in terminal:")
+                                .font(.caption2)
+                                .foregroundStyle(theme.secondaryText)
+                            Text("cc-monitor-doctor --fix")
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(theme.accent)
+                        }
+                        .padding(10)
+                        .frame(width: 200)
+                        .background(theme.panelBackground(opacity: panelOpacity))
+                    }
+                }
 
                 Spacer()
 
