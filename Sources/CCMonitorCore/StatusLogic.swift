@@ -18,14 +18,15 @@ public enum HookState: String {
     case compacting
 }
 
-/// General fallback: if hook says "working" but both hook file and reporter JSON are
-/// stale for this long, session is likely idle. Covers extended thinking and edge cases.
-public let hookStaleThresholdSeconds: TimeInterval = 7
+/// Thinking/silence threshold: when NO streaming has occurred since the last hook event
+/// (reporter NOT fresher than hook), the model may be thinking or the session may be idle.
+/// These two states are fundamentally indistinguishable from the outside.
+/// 12s balances quick idle detection vs brief false-idle during extended thinking.
+/// (Extended thinks can be 30-120s for Opus, but false idle during thinking is cosmetic
+/// — the user isn't looking at the menu bar while waiting for thinking to complete.)
+public let thinkingStaleThresholdSeconds: TimeInterval = 12
 
-/// General fallback reporter staleness (same use as hookStaleThresholdSeconds).
-public let reporterStaleThresholdSeconds: TimeInterval = 7
-
-/// Fast-path threshold: when the reporter WAS actively updating (streaming) but then
+/// Streaming fast-path threshold: when the reporter WAS actively updating (streaming) but then
 /// stopped, detect idle sooner. Only applies when reporter updated more recently than
 /// the hook file (proving streaming occurred after the last tool/event).
 /// Trade-off: during 7s reporter gaps, age may briefly exceed 6 causing ~0.5s false idle.
@@ -35,7 +36,7 @@ public let streamStopStaleSeconds: TimeInterval = 6
 /// Compute status from hook state (preferred) or fall back to time-based.
 /// - hookAge: seconds since hook state file was last modified
 /// - age: seconds since last_updated field in JSON (used for time-based fallback and liveness)
-public func computeStatus(hookState: HookState?, hookAge: TimeInterval? = nil, age: TimeInterval, processAlive: Bool) -> AgentStatus {
+public func computeStatus(hookState: HookState?, hookAge: TimeInterval? = nil, age: TimeInterval, processAlive: Bool, hasActiveAgents: Bool = false) -> AgentStatus {
     // If process is dead, always disconnected
     if !processAlive && age > livenessCheckThresholdSeconds {
         return .disconnected
@@ -48,22 +49,27 @@ public func computeStatus(hookState: HookState?, hookAge: TimeInterval? = nil, a
             return .working
         case .working:
             if let hookAge = hookAge {
-                // Fast path: reporter was updating AFTER the last hook event,
-                // meaning streaming was active. If reporter then goes stale,
-                // streaming likely stopped (user pressed Escape).
+                // Was the reporter updating AFTER the last hook event?
                 // hookAge > age + 2 requires reporter fired ≥2s after hook,
                 // proving sustained streaming (not just a single coincidental fire).
-                // This protects extended thinking from premature fast-path idle.
                 let reporterFresherThanHook = hookAge > age + 2.0
-                if reporterFresherThanHook && age > streamStopStaleSeconds {
-                    return processAlive ? .idle : .disconnected
-                }
 
-                // General fallback: both hook file and reporter JSON are stale.
-                // Covers extended thinking (no streaming yet) and edge cases.
-                if hookAge > hookStaleThresholdSeconds,
-                   age > reporterStaleThresholdSeconds {
-                    return processAlive ? .idle : .disconnected
+                if reporterFresherThanHook {
+                    // Streaming was proven active. If reporter goes stale,
+                    // streaming stopped (user pressed Escape or response ended).
+                    if age > streamStopStaleSeconds {
+                        return processAlive ? .idle : .disconnected
+                    }
+                } else if !hasActiveAgents {
+                    // No streaming since last hook → likely thinking phase.
+                    // During extended thinking, neither hooks nor reporter fire,
+                    // so both ages grow together.
+                    // Skip this fallback when subagents are known to be running —
+                    // their presence proves the session is actively working.
+                    if hookAge > thinkingStaleThresholdSeconds,
+                       age > thinkingStaleThresholdSeconds {
+                        return processAlive ? .idle : .disconnected
+                    }
                 }
             }
             return .working
@@ -91,11 +97,11 @@ public enum SessionAction {
     case delete
 }
 
-public func sessionAction(hookState: HookState?, hookAge: TimeInterval? = nil, age: TimeInterval, processAlive: Bool) -> SessionAction {
+public func sessionAction(hookState: HookState?, hookAge: TimeInterval? = nil, age: TimeInterval, processAlive: Bool, hasActiveAgents: Bool = false) -> SessionAction {
     if !processAlive && age > deadCleanupThresholdSeconds {
         return .delete
     }
-    return .keep(computeStatus(hookState: hookState, hookAge: hookAge, age: age, processAlive: processAlive))
+    return .keep(computeStatus(hookState: hookState, hookAge: hookAge, age: age, processAlive: processAlive, hasActiveAgents: hasActiveAgents))
 }
 
 public func sessionAction(age: TimeInterval, processAlive: Bool) -> SessionAction {

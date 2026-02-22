@@ -200,7 +200,7 @@ final class SessionMonitor: ObservableObject {
 
             let (hookData, hookAge) = readHookState(dir: dir, sessionId: session.sessionId, now: now)
 
-            switch sessionAction(hookState: hookData.state, hookAge: hookAge, age: age, processAlive: session.processAlive) {
+            switch sessionAction(hookState: hookData.state, hookAge: hookAge, age: age, processAlive: session.processAlive, hasActiveAgents: !hookData.activeAgents.isEmpty) {
             case .delete:
                 toDelete.append(url)
                 let stateFile = dir.appendingPathComponent(".\(session.sessionId).state")

@@ -69,7 +69,7 @@ Add the following to your `~/.claude/settings.json`:
     "Notification": [
       {
         "matcher": "permission_prompt",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh waiting_permission" }]
+        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh notification_permission" }]
       },
       {
         "matcher": "idle_prompt",
@@ -109,6 +109,8 @@ Add the following to your `~/.claude/settings.json`:
   }
 }
 ```
+
+> **Note:** `notification_permission` (not `waiting_permission`) is intentional for `Notification(permission_prompt)`. The hook script suppresses late notification events when the session has already moved to `working` or `idle`, preventing stale "Needs Input" flashing.
 
 Then install the hook script:
 

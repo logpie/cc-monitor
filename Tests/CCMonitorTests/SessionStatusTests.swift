@@ -239,7 +239,10 @@ do {
         SimEvent(time: 4,   kind: .hook(.waitingPermission)),
     ]
 
-    // Must stay attention for 10 full minutes
+    // Must stay attention indefinitely — user may be AFK, and hiding the
+    // reminder would be worse than a false positive during tool execution.
+    // Known limitation: after user approves a long tool (no "approved" event),
+    // state stays waiting_permission until PostToolUse fires.
     for t in stride(from: 4.0, through: 600.0, by: 30.0) {
         let s = statusAt(t, events: events)
         check(s == .attention, "FP5 T=\(Int(t))s: waiting permission, must be attention (got \(s))")
@@ -483,11 +486,11 @@ do {
         // T=8: Escape pressed. NO hooks fire. Reporter stops.
     ]
 
-    // hookAge > 7 at T=11 (from T=4). age > 7 at T=13 (from T=6).
-    // Detection at max(11, 13) ≈ T=14.
-    check(statusAt(12, events: events) == .working, "SP7 T=12: hookAge=8, age=6")
-    check(statusAt(13, events: events) == .working, "SP7 T=13: age=7, at threshold")
-    check(statusAt(14, events: events) == .idle,    "SP7 T=14: staleness → idle")
+    // hookAge - age = 2.0 (not > 2.0) → thinking path (12s threshold).
+    // In practice, PostToolUseFailure or idle_prompt fires for faster detection.
+    check(statusAt(14, events: events) == .working, "SP7 T=14: hookAge=10, age=8, both < 12 → working")
+    check(statusAt(16, events: events) == .working, "SP7 T=16: hookAge=12, age=10, hookAge not > 12 → working")
+    check(statusAt(19, events: events) == .idle,    "SP7 T=19: hookAge=15>12, age=13>12 → idle")
 }
 
 section("SP8: Process crash during compacting")
@@ -663,78 +666,168 @@ do {
 }
 
 // ============================================================
-// MARK: - KNOWN LIMITATIONS (documented, accepted trade-offs)
+// MARK: - THINKING PHASE TESTS
+// Extended thinking uses 12s threshold — accepts brief false idle during long thinks.
 // ============================================================
 
-section("KNOWN1: Extended thinking >7s without streaming — briefly shows idle")
+section("THINK1: Short thinking 10s — stays working (within 12s threshold)")
 do {
-    // Claude thinks 20s between tools. hookAge exceeds threshold.
-    // The reporter does NOT fire during thinking (only during streaming).
-    // Both hookAge and age grow, so the dual check fires.
-    // In practice, the reporter likely fires during thinking (status line animation),
-    // so this scenario mostly doesn't occur. Self-corrects on next tool.
+    // Claude thinks 10s between tools. Well within 12s threshold.
     let events: [SimEvent] = [
         SimEvent(time: 0,  kind: .hook(.idle)),
         SimEvent(time: 1,  kind: .hook(.working)),
         SimEvent(time: 3,  kind: .hook(.working)),       // PreToolUse (last hook at T=3)
         SimEvent(time: 4,  kind: .statusLine),            // last reporter at T=4
-        // 20s of pure thinking — no hooks, no reporter
-        SimEvent(time: 23, kind: .hook(.working)),       // next PreToolUse
+        // 10s of pure thinking — no hooks, no reporter
+        SimEvent(time: 13, kind: .hook(.working)),       // next PreToolUse
     ]
 
-    // hookAge > 7 at T=10 (from T=3). age > 7 at T=11 (from T=4).
-    // False idle at max(10, 11) ≈ T=12.
-    check(statusAt(10, events: events) == .working, "KNOWN1 T=10: hookAge=7, still working")
-    check(statusAt(11, events: events) == .working, "KNOWN1 T=11: age=7, at threshold")
-    check(statusAt(12, events: events) == .idle,    "KNOWN1 T=12: false idle (hookAge=9, age=8>7)")
-    check(statusAt(23, events: events) == .working, "KNOWN1 T=23: self-corrects on next tool")
+    // hookAge - age = 1.0 (not > 2.0) → thinking path (12s threshold).
+    // 10s think is within 12s → stays working throughout.
+    for t in stride(from: 3.0, through: 12.0, by: 1.0) {
+        let s = statusAt(t, events: events)
+        check(s == .working, "THINK1 T=\(Int(t))s: thinking, must be working (got \(s))")
+    }
+    check(statusAt(13, events: events) == .working, "THINK1 T=13: next tool → still working")
 }
 
-section("KNOWN2: Long subagent >7s without intermediate hooks or reporter")
+section("THINK2: Subagent 10s without events — stays working")
 do {
+    // Subagent runs 10s without any hooks or reporter updates.
+    // hookAge - age = 1.0 → thinking path (12s). Within threshold.
     let events: [SimEvent] = [
         SimEvent(time: 0,  kind: .hook(.idle)),
         SimEvent(time: 2,  kind: .hook(.working)),
         SimEvent(time: 5,  kind: .hook(.working)),       // SubagentStart (last hook at T=5)
         SimEvent(time: 6,  kind: .statusLine),            // last reporter at T=6
-        // Subagent runs 25s with no events
-        SimEvent(time: 30, kind: .hook(.working)),       // SubagentStop
+        // Subagent runs 10s with no events
+        SimEvent(time: 15, kind: .hook(.working)),       // SubagentStop
     ]
 
-    // hookAge > 7 at T=12 (from T=5). age > 7 at T=13 (from T=6).
-    // False idle at max(12, 13) ≈ T=14.
-    check(statusAt(13, events: events) == .working, "KNOWN2 T=13: hookAge=8, age=7 at threshold")
-    check(statusAt(14, events: events) == .idle,    "KNOWN2 T=14: false idle during subagent")
-    check(statusAt(30, events: events) == .working, "KNOWN2 T=30: self-corrects")
+    for t in stride(from: 5.0, through: 14.0, by: 1.0) {
+        let s = statusAt(t, events: events)
+        check(s == .working, "THINK2 T=\(Int(t))s: subagent running, must be working (got \(s))")
+    }
+    check(statusAt(15, events: events) == .working, "THINK2 T=15: SubagentStop → working")
+}
+
+section("THINK3: Extended thinking 30s — shows idle then recovers on next tool")
+do {
+    // Opus can think for 30-120s. With 12s threshold, we accept brief false idle.
+    // This is cosmetic — user is waiting anyway. Recovery is instant on next event.
+    let events: [SimEvent] = [
+        SimEvent(time: 0,  kind: .hook(.idle)),
+        SimEvent(time: 2,  kind: .hook(.working)),       // UserPromptSubmit
+        SimEvent(time: 5,  kind: .hook(.working)),       // PreToolUse
+        SimEvent(time: 6,  kind: .statusLine),            // last reporter
+        // 30s of thinking
+        SimEvent(time: 35, kind: .hook(.working)),       // next PreToolUse
+        SimEvent(time: 40, kind: .hook(.idle)),           // Stop
+    ]
+
+    // Within 12s threshold — working
+    for t in stride(from: 5.0, through: 16.0, by: 1.0) {
+        let s = statusAt(t, events: events)
+        check(s == .working, "THINK3 T=\(Int(t))s: within threshold, working (got \(s))")
+    }
+    // After 12s — false idle (accepted trade-off)
+    check(statusAt(19, events: events) == .idle,    "THINK3 T=19: hookAge=14>12, age=13>12 → idle (false)")
+    check(statusAt(30, events: events) == .idle,    "THINK3 T=30: still idle during thinking")
+    // Recovery on next hook event
+    check(statusAt(35, events: events) == .working, "THINK3 T=35: next tool → recovery")
+    check(statusAt(40, events: events) == .idle,    "THINK3 T=40: done")
+}
+
+section("THINK4: Thinking threshold boundary — exact 12s vs 13s")
+do {
+    // Precise boundary test for the 12s thinking threshold.
+    let events: [SimEvent] = [
+        SimEvent(time: 0,  kind: .hook(.idle)),
+        SimEvent(time: 2,  kind: .hook(.working)),
+        SimEvent(time: 5,  kind: .hook(.working)),       // PreToolUse (last hook at T=5)
+        SimEvent(time: 6,  kind: .statusLine),            // last reporter at T=6
+        // Long silence
+        SimEvent(time: 50, kind: .hook(.working)),       // recovery
+    ]
+
+    // At T=17: hookAge=12, age=11. hookAge NOT > 12 → working
+    check(statusAt(17, events: events) == .working, "THINK4 T=17: hookAge=12 (not >12) → working")
+    // At T=18: hookAge=13>12, age=12. age NOT > 12 → working
+    check(statusAt(18, events: events) == .working, "THINK4 T=18: age=12 (not >12) → working")
+    // At T=19: hookAge=14>12, age=13>12 → idle
+    check(statusAt(19, events: events) == .idle,    "THINK4 T=19: both > 12 → idle")
+    check(statusAt(30, events: events) == .idle,    "THINK4 T=30: still idle")
+    check(statusAt(50, events: events) == .working, "THINK4 T=50: recovery")
+}
+
+section("THINK5: No reporter fire after hook — hookAge = age, 12s threshold")
+do {
+    // When the tool completes instantly (PostToolUse fires), and no reporter
+    // fires before thinking starts, hookAge and age grow at the same rate.
+    let events: [SimEvent] = [
+        SimEvent(time: 0,  kind: .hook(.idle)),
+        SimEvent(time: 2,  kind: .hook(.working)),       // UserPromptSubmit
+        SimEvent(time: 5,  kind: .hook(.working)),       // PreToolUse + PostToolUse (fast tool)
+        // No reporter fire after T=5. hookAge = age.
+        SimEvent(time: 30, kind: .hook(.working)),       // next tool
+    ]
+
+    // Within 12s: working
+    for t in stride(from: 5.0, through: 17.0, by: 1.0) {
+        let s = statusAt(t, events: events)
+        check(s == .working, "THINK5 T=\(Int(t))s: hookAge=age, within threshold (got \(s))")
+    }
+    // After 12s: idle (hookAge=age=13 > 12)
+    check(statusAt(18, events: events) == .idle, "THINK5 T=18: hookAge=age=13>12 → idle")
+    check(statusAt(30, events: events) == .working, "THINK5 T=30: recovery")
+}
+
+section("THINK6: Active subagents suppress thinking-path idle fallback")
+do {
+    // When subagents are known to be running, the thinking-path idle fallback
+    // is suppressed — their presence proves the session is actively working.
+    // This prevents false idle during long subagent runs (e.g., 60s+ agents).
+    check(computeStatus(hookState: .working, hookAge: 20, age: 20, processAlive: true, hasActiveAgents: false) == .idle,
+          "THINK6: no agents, both > 12 → idle")
+    check(computeStatus(hookState: .working, hookAge: 20, age: 20, processAlive: true, hasActiveAgents: true) == .working,
+          "THINK6: agents active, both > 12 → still working")
+    check(computeStatus(hookState: .working, hookAge: 120, age: 120, processAlive: true, hasActiveAgents: true) == .working,
+          "THINK6: agents active, 120s → still working")
+    // Streaming fast-path is NOT affected by agents (if reporter proved streaming then stopped)
+    check(computeStatus(hookState: .working, hookAge: 60, age: 10, processAlive: true, hasActiveAgents: true) == .idle,
+          "THINK6: streaming stopped, agents don't override fast-path")
 }
 
 // ============================================================
 // MARK: - UNIT TESTS
 // ============================================================
 
-section("Unit: hookAge boundary values")
-check(computeStatus(hookState: .working, hookAge: 6.999, age: 20, processAlive: true) == .working, "hookAge=6.999 → working")
-check(computeStatus(hookState: .working, hookAge: 7.0,  age: 20, processAlive: true) == .working, "hookAge=7.0 → working (not >)")
-check(computeStatus(hookState: .working, hookAge: 7.001, age: 20, processAlive: true) == .idle,   "hookAge=7.001 age=20 → idle")
-
-section("Unit: age threshold — fast path (reporter was streaming, hookAge >> age)")
-check(computeStatus(hookState: .working, hookAge: 60, age: 0, processAlive: true) == .working,  "hookAge=60 age=0 → working")
+section("Unit: fast path — streaming proven (hookAge > age + 2)")
+check(computeStatus(hookState: .working, hookAge: 60, age: 0, processAlive: true) == .working,  "hookAge=60 age=0 → working (streaming, not stale)")
 check(computeStatus(hookState: .working, hookAge: 60, age: 5, processAlive: true) == .working,  "hookAge=60 age=5 → working")
 check(computeStatus(hookState: .working, hookAge: 60, age: 6, processAlive: true) == .working,  "hookAge=60 age=6 → working (not > 6)")
 check(computeStatus(hookState: .working, hookAge: 60, age: 7, processAlive: true) == .idle,     "hookAge=60 age=7 → idle (fast path, age > 6)")
 check(computeStatus(hookState: .working, hookAge: 60, age: 8, processAlive: true) == .idle,     "hookAge=60 age=8 → idle")
 
-section("Unit: age threshold — general fallback (reporter NOT streaming, hookAge ≈ age)")
-check(computeStatus(hookState: .working, hookAge: 8, age: 7, processAlive: true) == .working,     "hookAge=8 age=7 → working (age not > 7)")
-check(computeStatus(hookState: .working, hookAge: 8.001, age: 7.001, processAlive: true) == .idle, "hookAge=8.001 age=7.001 → idle")
-
 section("Unit: fast path boundary — hookAge must exceed age + 2")
-check(computeStatus(hookState: .working, hookAge: 9, age: 7, processAlive: true) == .working,     "hookAge-age=2, exactly at boundary → working")
+check(computeStatus(hookState: .working, hookAge: 9, age: 7, processAlive: true) == .working,     "hookAge-age=2, exactly at boundary → working (thinking path)")
 check(computeStatus(hookState: .working, hookAge: 9.001, age: 7, processAlive: true) == .idle,    "hookAge-age=2.001, past boundary → idle (fast path)")
-check(computeStatus(hookState: .working, hookAge: 8, age: 7, processAlive: true) == .working,     "hookAge-age=1, no fast path → working")
+check(computeStatus(hookState: .working, hookAge: 8, age: 7, processAlive: true) == .working,     "hookAge-age=1, thinking path → working")
+
+section("Unit: thinking path — no streaming (hookAge - age <= 2)")
+check(computeStatus(hookState: .working, hookAge: 8, age: 7, processAlive: true) == .working,      "hookAge=8 age=7 → working (thinking, <12s)")
+check(computeStatus(hookState: .working, hookAge: 8.001, age: 7.001, processAlive: true) == .working, "hookAge=8 age=7 → working (thinking, <12s)")
+check(computeStatus(hookState: .working, hookAge: 12, age: 11, processAlive: true) == .working,    "hookAge=12 age=11 → working (hookAge not > 12)")
+check(computeStatus(hookState: .working, hookAge: 13, age: 12, processAlive: true) == .working,    "hookAge=13 age=12 → working (age not > 12)")
+check(computeStatus(hookState: .working, hookAge: 13, age: 13, processAlive: true) == .idle,       "hookAge=13 age=13 → idle (both > 12)")
+check(computeStatus(hookState: .working, hookAge: 120, age: 120, processAlive: true) == .idle,     "hookAge=120 age=120 → idle (long stale)")
+// hookAge < age: hook fired more recently than reporter (normal after hook event)
+check(computeStatus(hookState: .working, hookAge: 7, age: 20, processAlive: true) == .working,     "hookAge=7 age=20 → working (thinking, hookAge<12)")
 
 section("Unit: stale working + dead process → disconnected")
-check(computeStatus(hookState: .working, hookAge: 8, age: 8, processAlive: false) == .disconnected, "stale + dead → disconnected")
+// Dead process is caught at the top of computeStatus regardless of thinking threshold
+check(computeStatus(hookState: .working, hookAge: 8, age: 8, processAlive: false) == .disconnected, "stale + dead → disconnected (age>5, dead)")
+check(computeStatus(hookState: .working, hookAge: 61, age: 61, processAlive: false) == .disconnected, "thinking-stale + dead → disconnected")
 
 section("Unit: nil hookAge → no staleness check, regardless of age")
 check(computeStatus(hookState: .working, hookAge: nil, age: 0,   processAlive: true) == .working, "nil hookAge age=0")
@@ -747,8 +840,11 @@ check(computeStatus(hookState: .waitingInput,      hookAge: 300, age: 300, proce
 check(computeStatus(hookState: .compacting,        hookAge: 300, age: 300, processAlive: true) == .working,   "compacting: immune")
 
 section("Unit: sessionAction passes hookAge correctly")
-if case .keep(let s) = sessionAction(hookState: .working, hookAge: 60, age: 60, processAlive: true) {
-    check(s == .idle, "sessionAction hookAge=60 age=60 → idle")
+if case .keep(let s) = sessionAction(hookState: .working, hookAge: 61, age: 61, processAlive: true) {
+    check(s == .idle, "sessionAction hookAge=61 age=61 → idle (thinking path)")
+} else { check(false, "should keep") }
+if case .keep(let s) = sessionAction(hookState: .working, hookAge: 100, age: 10, processAlive: true) {
+    check(s == .idle, "sessionAction hookAge=100 age=10 → idle (streaming fast path)")
 } else { check(false, "should keep") }
 
 // ============================================================
@@ -788,8 +884,7 @@ section("AgentStatus.displayOrder")
 check(AgentStatus.displayOrder == [.attention, .working, .idle, .disconnected], "order")
 
 section("Thresholds")
-check(hookStaleThresholdSeconds == 7, "hookStale=7")
-check(reporterStaleThresholdSeconds == 7, "reporterStale=7")
+check(thinkingStaleThresholdSeconds == 12, "thinkingStale=12")
 check(streamStopStaleSeconds == 6, "streamStop=6")
 check(workingThresholdSeconds == 3, "working=3")
 check(livenessCheckThresholdSeconds == 5, "liveness=5")
