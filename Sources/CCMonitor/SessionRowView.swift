@@ -15,10 +15,9 @@ extension Color {
 
 struct SessionRowView: View {
     let session: SessionInfo
+    let theme: ColorTheme
     @State private var isHovered = false
-    @AppStorage("colorTheme") private var themeRaw = ColorTheme.dracula.rawValue
 
-    private var theme: ColorTheme { ColorTheme(rawValue: themeRaw) ?? .dracula }
     private var status: AgentStatus { session.cachedStatus }
 
     var body: some View {

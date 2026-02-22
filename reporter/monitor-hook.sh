@@ -16,21 +16,6 @@ state_file="$MONITOR_DIR/.${session_id}.state"
 # Ensure previous state file exists for slurpfile
 [ ! -f "$state_file" ] && echo '{}' > "$state_file"
 
-# For waiting_permission: skip if state file was just written (< 2s ago),
-# meaning PreToolUse just fired and the permission was auto-approved.
-if [ "$state" = "waiting_permission" ]; then
-    if [ "$(uname)" = "Darwin" ]; then
-        file_mtime=$(stat -f %m "$state_file" 2>/dev/null || echo 0)
-    else
-        file_mtime=$(stat -c %Y "$state_file" 2>/dev/null || echo 0)
-    fi
-    now=$(date +%s)
-    age=$((now - file_mtime))
-    if [ "$age" -le 1 ]; then
-        exit 0
-    fi
-fi
-
 # Single jq call: compute context + last_message + merge with previous, output final state JSON
 tmp_file="$MONITOR_DIR/.${session_id}.state.tmp"
 echo "$input" | jq -n \

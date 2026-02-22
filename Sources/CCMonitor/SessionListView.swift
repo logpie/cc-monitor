@@ -57,7 +57,7 @@ struct SessionListView: View {
                                 // Session cards
                                 VStack(spacing: 3) {
                                     ForEach(group.sessions) { session in
-                                        SessionRowView(session: session)
+                                        SessionRowView(session: session, theme: theme)
                                             .id("\(session.cachedStatus.rawValue)-\(session.id)")
                                     }
                                 }
