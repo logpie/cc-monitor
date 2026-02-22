@@ -45,9 +45,14 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
 </dict>
 </plist>
 PLIST
+
+# Install app icon
+cp resources/AppIcon.icns "$RESOURCES_DIR/AppIcon.icns"
 
 # Install the reporter script
 cp reporter/monitor-reporter.sh "$HOME/.claude/monitor-reporter.sh"

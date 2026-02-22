@@ -148,6 +148,22 @@ CCMonitor.app
     └─ Click → focuses terminal via AppleScript / TTY escape codes
 ```
 
+## Status detection behavior
+
+CC Monitor infers session state from hook events and file timestamps. Most transitions are instant, but there are inherent trade-offs:
+
+| Transition | Latency | How it works |
+|---|---|---|
+| **Idle → Working** | Instant | `UserPromptSubmit` hook fires immediately |
+| **Working → Needs Input** | Instant | `PermissionRequest` hook fires immediately |
+| **Working → Ready** (normal) | Instant | `Stop` hook fires when Claude finishes its turn |
+| **Working → Ready** (no Stop) | ~12s | If the `Stop` hook fails to fire (known edge case), staleness detection kicks in after ~12s of silence |
+| **Extended thinking** | May briefly show Ready | During long thinking phases (30-120s for Opus), neither hooks nor the status reporter fire. The session may briefly appear "Ready" until streaming begins. Recovery is instant once output starts. |
+| **Subagent running** | Stays Working | Active subagents are tracked explicitly — sessions with running subagents stay "Working" regardless of silence duration |
+| **Disconnected** | ~5s | Detected via process liveness check (PID-based with PPID=1 orphan detection, TTY fallback) |
+
+**Design priority:** "Needs Input" (permission/input prompts) is the highest-priority signal and has zero false positives — if the menu bar says a session needs attention, it genuinely does. The trade-off is that brief false "Ready" during extended thinking is accepted as cosmetic.
+
 ## License
 
 MIT
