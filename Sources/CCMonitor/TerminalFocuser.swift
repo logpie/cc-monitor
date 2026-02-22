@@ -20,7 +20,7 @@ enum TerminalFocuser {
         // Dismiss the menu bar panel
         NSApp.keyWindow?.close()
 
-        let fallbackTitle = session.displayLabel
+        let fallbackTitle = session.terminalMatchLabel
         let sessionId = session.sessionId
         let tty = session.tty
         let tmuxTarget = session.tmuxTarget

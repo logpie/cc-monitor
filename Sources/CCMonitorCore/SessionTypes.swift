@@ -43,7 +43,22 @@ public struct SessionInfo: Identifiable, Codable {
 
     public var id: String { sessionId }
 
+    /// Primary label: always the project name (stable project identity).
     public var displayLabel: String {
+        return projectName
+    }
+
+    /// Secondary subtitle: tab title when it provides extra context, otherwise directory path.
+    public var displaySubtitle: String {
+        // Tab title provides context (e.g. "Persistent Sessions", "Knowledge Dump Request")
+        if let t = ghosttyTabTitle, !t.isEmpty, t != projectName { return t }
+        if let t = tabTitle, !t.isEmpty, t != projectName { return t }
+        if let w = tmuxWindowName, !w.isEmpty, w != projectName { return w }
+        return displayPath
+    }
+
+    /// Rich label for terminal window matching (includes tab title if set).
+    public var terminalMatchLabel: String {
         if let t = ghosttyTabTitle, !t.isEmpty { return t }
         if let t = tabTitle, !t.isEmpty { return t }
         if let w = tmuxWindowName, !w.isEmpty { return w }

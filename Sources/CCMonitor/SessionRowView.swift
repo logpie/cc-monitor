@@ -33,7 +33,7 @@ struct SessionRowView: View {
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
 
-                Text(session.displayPath)
+                Text(session.displaySubtitle)
                     .font(.caption2)
                     .foregroundStyle(theme.tertiaryText)
                     .lineLimit(1)
