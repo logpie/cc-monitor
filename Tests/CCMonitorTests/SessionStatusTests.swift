@@ -271,7 +271,7 @@ do {
 section("FP7: Reporter fires every 7s (worst case) — must NOT false-idle")
 do {
     // Stress test: reporter fires at exactly 7s intervals (max observed gap).
-    // hookAge grows past 10, but age peaks at 7 < 8.
+    // hookAge grows past 7, but age peaks at exactly 7 (not > 7 with strict compare).
     let events: [SimEvent] = [
         SimEvent(time: 0,  kind: .hook(.idle)),
         SimEvent(time: 2,  kind: .hook(.working)),      // UserPromptSubmit
@@ -287,8 +287,8 @@ do {
         SimEvent(time: 50, kind: .hook(.idle)),          // Stop
     ]
 
-    // hookAge exceeds 10 after T=13, but age always < 7 (reporter fires every 7s).
-    // At worst: T=18-epsilon, age=7-epsilon < 8. Must stay working.
+    // hookAge exceeds 7 after T=10, but age peaks at exactly 7 (not > 7).
+    // At worst: T=18-epsilon, age=7-epsilon which is NOT > 7. Must stay working.
     for t in stride(from: 3.0, through: 49.0, by: 1.0) {
         let s = statusAt(t, events: events)
         check(s == .working, "FP7 T=\(Int(t))s: worst-case reporter gap, must be working (got \(s))")
@@ -331,12 +331,12 @@ do {
         // T=15: session finishes, Stop FAILS, no more events
     ]
 
-    // hookAge > 10 at T=16 (from T=5). age > 8 at T=23 (from T=14).
-    // Detection at max(16, 23) = T=23.
-    check(statusAt(15, events: events) == .working, "LAG2 T=15: hookAge=10, at threshold")
-    check(statusAt(20, events: events) == .working, "LAG2 T=20: hookAge=15, age=6 < 8")
-    check(statusAt(22, events: events) == .working, "LAG2 T=22: age=8, at threshold")
-    check(statusAt(23, events: events) == .idle,    "LAG2 T=23: stale detected → idle")
+    // hookAge > 7 at T=12.001 (from T=5). age > 7 at T=21.001 (from T=14).
+    // Detection at max(12, 21) ≈ T=22.
+    check(statusAt(15, events: events) == .working, "LAG2 T=15: hookAge=10, age=1")
+    check(statusAt(20, events: events) == .working, "LAG2 T=20: hookAge=15, age=6 < 7")
+    check(statusAt(21, events: events) == .working, "LAG2 T=21: age=7, at threshold")
+    check(statusAt(22, events: events) == .idle,    "LAG2 T=22: stale detected → idle")
 }
 
 section("LAG3: Broken Stop, reporter fires late — still detect within reasonable time")
@@ -352,11 +352,11 @@ do {
         // No more events
     ]
 
-    // hookAge > 10 at T=16. age > 8 at T=27 (from T=18).
-    // Detection at max(16, 27) = T=27.
+    // hookAge > 7 at T=12 (from T=5). age > 7 at T=25 (from T=18).
+    // Detection at max(12, 25) ≈ T=26.
     check(statusAt(22, events: events) == .working, "LAG3 T=22: age=4 (not yet stale)")
-    check(statusAt(26, events: events) == .working, "LAG3 T=26: age=8, at threshold")
-    check(statusAt(27, events: events) == .idle,    "LAG3 T=27: detected despite late reporter")
+    check(statusAt(25, events: events) == .working, "LAG3 T=25: age=7, at threshold")
+    check(statusAt(26, events: events) == .idle,    "LAG3 T=26: detected despite late reporter")
 }
 
 // ============================================================
@@ -392,11 +392,11 @@ do {
         // T=12: User presses Escape. NO hooks fire at all.
     ]
 
-    // hookAge > 10 at T=16 (from T=5). age > 8 at T=20 (from T=11).
-    // Detection at max(16, 20) = T=20.
-    check(statusAt(15, events: events) == .working, "SP2 T=15: hookAge=10, at threshold")
-    check(statusAt(19, events: events) == .working, "SP2 T=19: age=8, at threshold")
-    check(statusAt(20, events: events) == .idle,    "SP2 T=20: staleness fallback → idle")
+    // hookAge > 7 at T=12 (from T=5). age > 7 at T=18 (from T=11).
+    // Detection at max(12, 18) ≈ T=19.
+    check(statusAt(15, events: events) == .working, "SP2 T=15: hookAge=10, age=4")
+    check(statusAt(18, events: events) == .working, "SP2 T=18: age=7, at threshold")
+    check(statusAt(19, events: events) == .idle,    "SP2 T=19: staleness fallback → idle")
 }
 
 section("SP3: Ctrl+C kills process")
@@ -452,12 +452,11 @@ do {
     ]
 
     check(statusAt(128, events: events) == .working, "SP5 T=128: post-compact tool")
-    check(statusAt(135, events: events) == .working, "SP5 T=135: hookAge=7, grace period")
-    // hookAge > 10 at T=139 (from T=128). age > 8 at T=145 (from T=136).
-    // Detection at max(139, 145) = T=145.
-    check(statusAt(138, events: events) == .working, "SP5 T=138: hookAge=10 (threshold)")
-    check(statusAt(144, events: events) == .working, "SP5 T=144: age=8 (threshold)")
-    check(statusAt(145, events: events) == .idle,    "SP5 T=145: hookAge=17, age=9 → idle")
+    check(statusAt(135, events: events) == .working, "SP5 T=135: hookAge=7, at threshold")
+    // hookAge > 7 at T=135 (from T=128). age > 7 at T=143 (from T=136).
+    // Detection at max(135, 143) ≈ T=144.
+    check(statusAt(143, events: events) == .working, "SP5 T=143: age=7, at threshold")
+    check(statusAt(144, events: events) == .idle,    "SP5 T=144: hookAge=16, age=8 → idle")
 }
 
 section("SP6: Escape during tool execution")
@@ -485,11 +484,11 @@ do {
         // T=8: Escape pressed. NO hooks fire. Reporter stops.
     ]
 
-    // hookAge > 10 at T=15 (from T=4). age > 8 at T=15 (from T=6).
-    // Detection at max(15, 15) = T=15.
-    check(statusAt(12, events: events) == .working, "SP7 T=12: grace period")
-    check(statusAt(14, events: events) == .working, "SP7 T=14: hookAge=10 (threshold), age=8 (threshold)")
-    check(statusAt(15, events: events) == .idle,    "SP7 T=15: staleness → idle")
+    // hookAge > 7 at T=11 (from T=4). age > 7 at T=13 (from T=6).
+    // Detection at max(11, 13) ≈ T=14.
+    check(statusAt(12, events: events) == .working, "SP7 T=12: hookAge=8, age=6")
+    check(statusAt(13, events: events) == .working, "SP7 T=13: age=7, at threshold")
+    check(statusAt(14, events: events) == .idle,    "SP7 T=14: staleness → idle")
 }
 
 section("SP8: Process crash during compacting")
@@ -630,18 +629,18 @@ do {
         // Stop FAILS again.
     ]
 
-    // Turn 1: hookAge > 10 at T=16, age > 8 at T=20. idle at max(16, 20) = 20.
-    // Turn 2: hookAge > 10 at T=74, age > 8 at T=78. idle at max(74, 78) = 78.
+    // Turn 1: hookAge > 7 at T=12, age > 7 at T=18. idle at max(12, 18) ≈ T=19.
+    // Turn 2: hookAge > 7 at T=70, age > 7 at T=76. idle at max(70, 76) ≈ T=77.
     verify(events, [
         Expect(t: 5,  status: .working, reason: "turn 1 tool"),
-        Expect(t: 15, status: .working, reason: "turn 1 hookAge=10 (threshold)"),
-        Expect(t: 19, status: .working, reason: "turn 1 age=8 (threshold)"),
-        Expect(t: 20, status: .idle,    reason: "turn 1 hookAge=15, age=9 → idle"),
+        Expect(t: 15, status: .working, reason: "turn 1 hookAge=10, age=4"),
+        Expect(t: 18, status: .working, reason: "turn 1 age=7 (threshold)"),
+        Expect(t: 19, status: .idle,    reason: "turn 1 hookAge=14, age=8 → idle"),
         Expect(t: 50, status: .idle,    reason: "between turns"),
         Expect(t: 60, status: .working, reason: "turn 2 prompt"),
         Expect(t: 63, status: .working, reason: "turn 2 tool"),
-        Expect(t: 77, status: .working, reason: "turn 2 age=8 (threshold)"),
-        Expect(t: 78, status: .idle,    reason: "turn 2 hookAge=15, age=9 → idle"),
+        Expect(t: 76, status: .working, reason: "turn 2 age=7 (threshold)"),
+        Expect(t: 77, status: .idle,    reason: "turn 2 hookAge=14, age=8 → idle"),
     ], label: "SIM4")
 }
 
@@ -668,7 +667,7 @@ do {
 // MARK: - KNOWN LIMITATIONS (documented, accepted trade-offs)
 // ============================================================
 
-section("KNOWN1: Extended thinking >10s without streaming — briefly shows idle")
+section("KNOWN1: Extended thinking >7s without streaming — briefly shows idle")
 do {
     // Claude thinks 20s between tools. hookAge exceeds threshold.
     // The reporter does NOT fire during thinking (only during streaming).
@@ -684,15 +683,15 @@ do {
         SimEvent(time: 23, kind: .hook(.working)),       // next PreToolUse
     ]
 
-    // hookAge > 10 at T=14 (from T=3). age > 8 at T=13 (from T=4).
-    // False idle at max(14, 13) = T=14.
+    // hookAge > 7 at T=10 (from T=3). age > 7 at T=11 (from T=4).
+    // False idle at max(10, 11) ≈ T=12.
     check(statusAt(10, events: events) == .working, "KNOWN1 T=10: hookAge=7, still working")
-    check(statusAt(13, events: events) == .working, "KNOWN1 T=13: hookAge=10 (threshold)")
-    check(statusAt(14, events: events) == .idle,    "KNOWN1 T=14: false idle (hookAge=11, age=10>8)")
+    check(statusAt(11, events: events) == .working, "KNOWN1 T=11: age=7, at threshold")
+    check(statusAt(12, events: events) == .idle,    "KNOWN1 T=12: false idle (hookAge=9, age=8>7)")
     check(statusAt(23, events: events) == .working, "KNOWN1 T=23: self-corrects on next tool")
 }
 
-section("KNOWN2: Long subagent >10s without intermediate hooks or reporter")
+section("KNOWN2: Long subagent >7s without intermediate hooks or reporter")
 do {
     let events: [SimEvent] = [
         SimEvent(time: 0,  kind: .hook(.idle)),
@@ -703,10 +702,10 @@ do {
         SimEvent(time: 30, kind: .hook(.working)),       // SubagentStop
     ]
 
-    // hookAge > 10 at T=16 (from T=5). age > 8 at T=15 (from T=6).
-    // False idle at max(16, 15) = T=16.
-    check(statusAt(15, events: events) == .working, "KNOWN2 T=15: hookAge=10 (threshold)")
-    check(statusAt(16, events: events) == .idle,    "KNOWN2 T=16: false idle during subagent")
+    // hookAge > 7 at T=12 (from T=5). age > 7 at T=13 (from T=6).
+    // False idle at max(12, 13) ≈ T=14.
+    check(statusAt(13, events: events) == .working, "KNOWN2 T=13: hookAge=8, age=7 at threshold")
+    check(statusAt(14, events: events) == .idle,    "KNOWN2 T=14: false idle during subagent")
     check(statusAt(30, events: events) == .working, "KNOWN2 T=30: self-corrects")
 }
 
@@ -715,19 +714,19 @@ do {
 // ============================================================
 
 section("Unit: hookAge boundary values")
-check(computeStatus(hookState: .working, hookAge: 9.999, age: 20, processAlive: true) == .working, "hookAge=9.999 → working")
-check(computeStatus(hookState: .working, hookAge: 10.0,  age: 20, processAlive: true) == .working, "hookAge=10.0 → working (not >)")
-check(computeStatus(hookState: .working, hookAge: 10.001, age: 20, processAlive: true) == .idle,   "hookAge=10.001 age=20 → idle")
+check(computeStatus(hookState: .working, hookAge: 6.999, age: 20, processAlive: true) == .working, "hookAge=6.999 → working")
+check(computeStatus(hookState: .working, hookAge: 7.0,  age: 20, processAlive: true) == .working, "hookAge=7.0 → working (not >)")
+check(computeStatus(hookState: .working, hookAge: 7.001, age: 20, processAlive: true) == .idle,   "hookAge=7.001 age=20 → idle")
 
 section("Unit: age threshold for staleness (age must also exceed threshold)")
 check(computeStatus(hookState: .working, hookAge: 60, age: 0, processAlive: true) == .working,  "hookAge=60 age=0 → working (reporter just fired)")
 check(computeStatus(hookState: .working, hookAge: 60, age: 5, processAlive: true) == .working,  "hookAge=60 age=5 → working")
-check(computeStatus(hookState: .working, hookAge: 60, age: 7, processAlive: true) == .working,  "hookAge=60 age=7 → working")
-check(computeStatus(hookState: .working, hookAge: 60, age: 8, processAlive: true) == .working,  "hookAge=60 age=8 → working (not >)")
-check(computeStatus(hookState: .working, hookAge: 60, age: 9, processAlive: true) == .idle,     "hookAge=60 age=9 → idle")
+check(computeStatus(hookState: .working, hookAge: 60, age: 6, processAlive: true) == .working,  "hookAge=60 age=6 → working")
+check(computeStatus(hookState: .working, hookAge: 60, age: 7, processAlive: true) == .working,  "hookAge=60 age=7 → working (not >)")
+check(computeStatus(hookState: .working, hookAge: 60, age: 8, processAlive: true) == .idle,     "hookAge=60 age=8 → idle")
 
 section("Unit: stale working + dead process → disconnected")
-check(computeStatus(hookState: .working, hookAge: 11, age: 9, processAlive: false) == .disconnected, "stale + dead → disconnected")
+check(computeStatus(hookState: .working, hookAge: 8, age: 8, processAlive: false) == .disconnected, "stale + dead → disconnected")
 
 section("Unit: nil hookAge → no staleness check, regardless of age")
 check(computeStatus(hookState: .working, hookAge: nil, age: 0,   processAlive: true) == .working, "nil hookAge age=0")
@@ -781,11 +780,87 @@ section("AgentStatus.displayOrder")
 check(AgentStatus.displayOrder == [.attention, .working, .idle, .disconnected], "order")
 
 section("Thresholds")
-check(hookStaleThresholdSeconds == 10, "hookStale=10")
-check(reporterStaleThresholdSeconds == 8, "reporterStale=8")
+check(hookStaleThresholdSeconds == 7, "hookStale=7")
+check(reporterStaleThresholdSeconds == 7, "reporterStale=7")
 check(workingThresholdSeconds == 3, "working=3")
 check(livenessCheckThresholdSeconds == 5, "liveness=5")
 check(deadCleanupThresholdSeconds == 300, "cleanup=300")
+
+// ============================================================
+// MARK: - PERMISSION RACE AND PID TESTS
+// ============================================================
+
+section("RACE1: Late notification_permission suppressed — state stays working")
+do {
+    // Models the FIXED behavior: Notification(permission_prompt) fires ~6s after
+    // PermissionRequest, but the hook script suppresses it when state is "working".
+    // Result: no hook(.waitingPermission) at T=14, so state stays working.
+    let events: [SimEvent] = [
+        SimEvent(time: 0,  kind: .hook(.idle)),
+        SimEvent(time: 5,  kind: .hook(.waitingPermission)),  // PermissionRequest
+        SimEvent(time: 8,  kind: .hook(.working)),            // User approves → PreToolUse
+        SimEvent(time: 10, kind: .statusLine),                // Reporter fires during tool
+        // T=14: Late Notification(permission_prompt) — suppressed by hook script
+        // (no event here because the write is skipped)
+        SimEvent(time: 15, kind: .statusLine),
+        SimEvent(time: 20, kind: .hook(.idle)),               // Stop
+    ]
+
+    check(statusAt(5,  events: events) == .attention, "RACE1 T=5: permission requested")
+    check(statusAt(8,  events: events) == .working,   "RACE1 T=8: approved → working")
+    check(statusAt(14, events: events) == .working,   "RACE1 T=14: late notification suppressed, still working")
+    check(statusAt(20, events: events) == .idle,       "RACE1 T=20: stop → idle")
+}
+
+section("RACE2: notification_permission arrives when NOT working — takes effect")
+do {
+    // When the session is idle and notification_permission arrives (no prior working),
+    // the hook script should let it through as waiting_permission.
+    let events: [SimEvent] = [
+        SimEvent(time: 0,  kind: .hook(.idle)),
+        SimEvent(time: 5,  kind: .hook(.waitingPermission)),  // notification_permission → falls through
+    ]
+
+    check(statusAt(5, events: events) == .attention, "RACE2 T=5: notification accepted when not working")
+}
+
+section("Unit: SessionInfo JSON with and without pid")
+do {
+    let jsonWithPid = """
+    {"session_id":"abc","project_name":"test","project_dir":"/tmp","git_branch":"main",
+     "git_dirty":0,"git_staged":0,"git_untracked":0,"model":"test",
+     "context_used_pct":50,"context_window_size":200000,"cost_usd":1.0,
+     "last_updated":1000,"tty":"/dev/ttys001","pid":12345,
+     "tmux_target":"","tmux_window_name":"","tab_title":"","ghostty_window":"","ghostty_tab":""}
+    """.data(using: .utf8)!
+    let s1 = try! JSONDecoder().decode(SessionInfo.self, from: jsonWithPid)
+    check(s1.pid == 12345, "pid parsed correctly")
+
+    let jsonWithoutPid = """
+    {"session_id":"abc","project_name":"test","project_dir":"/tmp","git_branch":"main",
+     "git_dirty":0,"git_staged":0,"git_untracked":0,"model":"test",
+     "context_used_pct":50,"context_window_size":200000,"cost_usd":1.0,
+     "last_updated":1000,"tty":"/dev/ttys001",
+     "tmux_target":"","tmux_window_name":"","tab_title":"","ghostty_window":"","ghostty_tab":""}
+    """.data(using: .utf8)!
+    let s2 = try! JSONDecoder().decode(SessionInfo.self, from: jsonWithoutPid)
+    check(s2.pid == nil, "pid nil when absent (backward compat)")
+}
+
+section("Unit: Orphan/dead process → disconnected via computeStatus")
+do {
+    // When isProcessAlive detects PPID=1 or PID gone, processAlive=false.
+    // computeStatus should return .disconnected when age > liveness threshold.
+    check(computeStatus(hookState: .working, hookAge: 0, age: 6, processAlive: false) == .disconnected,
+          "orphan: working → disconnected")
+    check(computeStatus(hookState: .idle, hookAge: 0, age: 6, processAlive: false) == .disconnected,
+          "orphan: idle → disconnected")
+    check(computeStatus(hookState: .waitingPermission, hookAge: 0, age: 6, processAlive: false) == .disconnected,
+          "orphan: waiting_permission → disconnected")
+    // Young session (age < threshold) — process assumed alive regardless
+    check(computeStatus(hookState: .working, hookAge: 0, age: 2, processAlive: false) == .working,
+          "young session: processAlive ignored")
+}
 
 // ============================================================
 print("")

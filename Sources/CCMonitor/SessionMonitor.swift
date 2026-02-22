@@ -19,6 +19,9 @@ final class SessionMonitor: ObservableObject {
     /// Cached Ghostty tab titles: [tty: title]
     private var tabTitleCache: [String: String] = [:]
 
+    /// Cached PID start times for reuse detection: [pid: startTime]
+    private var pidStartTimeCache: [UInt32: TimeInterval] = [:]
+
     /// Monotonic counter to debounce concurrent loads — only latest load's results apply.
     private var loadSequence: UInt64 = 0
 
@@ -86,9 +89,10 @@ final class SessionMonitor: ObservableObject {
         let dir = monitorDir
         let cache = livenessCache
         let titleCache = tabTitleCache
+        let pidTimes = pidStartTimeCache
 
         ioQueue.async { [weak self] in
-            var result = Self.loadFromDisk(dir: dir, livenessCache: cache, checkLiveness: checkLiveness)
+            var result = Self.loadFromDisk(dir: dir, livenessCache: cache, pidStartTimes: pidTimes, checkLiveness: checkLiveness)
 
             // On liveness check path, also resolve Ghostty tab titles
             if checkLiveness {
@@ -114,6 +118,7 @@ final class SessionMonitor: ObservableObject {
                 guard let self, seq == self.loadSequence else { return }
                 self.sessions = result.sessions
                 self.livenessCache = result.updatedCache
+                self.pidStartTimeCache = result.updatedPidStartTimes
 
                 // Update tab title cache
                 if checkLiveness {
@@ -135,6 +140,7 @@ final class SessionMonitor: ObservableObject {
     private struct LoadResult {
         var sessions: [SessionInfo]
         var updatedCache: [String: Bool]
+        var updatedPidStartTimes: [UInt32: TimeInterval]
         var toDelete: [URL]
     }
 
@@ -142,16 +148,18 @@ final class SessionMonitor: ObservableObject {
     private nonisolated static func loadFromDisk(
         dir: URL,
         livenessCache: [String: Bool],
+        pidStartTimes: [UInt32: TimeInterval],
         checkLiveness: Bool
     ) -> LoadResult {
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil
         ) else {
-            return LoadResult(sessions: [], updatedCache: livenessCache, toDelete: [])
+            return LoadResult(sessions: [], updatedCache: livenessCache, updatedPidStartTimes: pidStartTimes, toDelete: [])
         }
 
         let now = Date()
         var updatedCache = livenessCache
+        var updatedPidStartTimes = pidStartTimes
         var toDelete: [URL] = []
         var sessions: [SessionInfo] = []
 
@@ -166,7 +174,12 @@ final class SessionMonitor: ObservableObject {
 
             if shouldCheckLiveness(age: age) {
                 if checkLiveness {
-                    let alive = isClaudeAlive(on: session.tty)
+                    let alive: Bool
+                    if let pid = session.pid {
+                        alive = isProcessAlive(pid: pid, pidStartTimes: &updatedPidStartTimes)
+                    } else {
+                        alive = isClaudeAliveByTTY(on: session.tty)
+                    }
                     updatedCache[session.sessionId] = alive
                     session.processAlive = alive
                 } else {
@@ -182,6 +195,9 @@ final class SessionMonitor: ObservableObject {
                 let stateFile = dir.appendingPathComponent(".\(session.sessionId).state")
                 toDelete.append(stateFile)
                 updatedCache.removeValue(forKey: session.sessionId)
+                if let pid = session.pid {
+                    updatedPidStartTimes.removeValue(forKey: pid)
+                }
             case .keep(let status):
                 session.cachedStatus = status
                 session.hookState = hookData.state
@@ -193,7 +209,7 @@ final class SessionMonitor: ObservableObject {
         }
 
         sessions.sort { $0.lastUpdated > $1.lastUpdated }
-        return LoadResult(sessions: sessions, updatedCache: updatedCache, toDelete: toDelete)
+        return LoadResult(sessions: sessions, updatedCache: updatedCache, updatedPidStartTimes: updatedPidStartTimes, toDelete: toDelete)
     }
 
     private nonisolated static func readHookState(dir: URL, sessionId: String, now: Date) -> (HookFileData, TimeInterval?) {
@@ -302,7 +318,46 @@ final class SessionMonitor: ObservableObject {
         return true
     }
 
-    private nonisolated static func isClaudeAlive(on tty: String?) -> Bool {
+    /// PID-based liveness check using sysctl. Detects orphans (PPID=1) and PID reuse.
+    private nonisolated static func isProcessAlive(
+        pid: UInt32,
+        pidStartTimes: inout [UInt32: TimeInterval]
+    ) -> Bool {
+        var info = kinfo_proc()
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
+        var size = MemoryLayout<kinfo_proc>.size
+
+        guard sysctl(&mib, UInt32(mib.count), &info, &size, nil, 0) == 0,
+              size > 0  // size == 0 means process not found
+        else {
+            pidStartTimes.removeValue(forKey: pid)
+            return false
+        }
+
+        // Orphan detection: parent is launchd (PID 1) — terminal that spawned Claude died
+        if info.kp_eproc.e_ppid == 1 {
+            pidStartTimes.removeValue(forKey: pid)
+            return false
+        }
+
+        // PID reuse detection: compare process start time
+        let tv = info.kp_proc.p_starttime
+        let startTime = TimeInterval(tv.tv_sec) + TimeInterval(tv.tv_usec) / 1_000_000
+
+        if let cached = pidStartTimes[pid] {
+            if abs(startTime - cached) > 1.0 {
+                pidStartTimes.removeValue(forKey: pid)
+                return false  // PID was recycled by a different process
+            }
+        } else {
+            pidStartTimes[pid] = startTime
+        }
+
+        return true
+    }
+
+    /// TTY-based liveness fallback for sessions without PID (backward compat).
+    private nonisolated static func isClaudeAliveByTTY(on tty: String?) -> Bool {
         guard let tty = tty, !tty.isEmpty else { return false }
         let short = tty.replacingOccurrences(of: "/dev/", with: "")
         let task = Process()

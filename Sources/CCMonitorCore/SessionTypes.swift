@@ -34,6 +34,7 @@ public struct SessionInfo: Identifiable, Codable {
     public let costUsd: Double
     public let lastUpdated: TimeInterval
     public let tty: String?
+    public let pid: UInt32?
     public let tmuxTarget: String?
     public let tmuxWindowName: String?
     public let tabTitle: String?
@@ -86,6 +87,7 @@ public struct SessionInfo: Identifiable, Codable {
         case costUsd = "cost_usd"
         case lastUpdated = "last_updated"
         case tty
+        case pid
         case tmuxTarget = "tmux_target"
         case tmuxWindowName = "tmux_window_name"
         case tabTitle = "tab_title"

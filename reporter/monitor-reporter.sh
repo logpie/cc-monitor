@@ -89,6 +89,7 @@ jq -n \
     --argjson cost "${cost_usd:-0}" \
     --argjson ts "$now" \
     --arg tty "$session_tty" \
+    --argjson pid "$claude_pid" \
     --arg tmux "$tmux_target" \
     --arg tmux_wname "$tmux_window_name" \
     --arg tab_title "$tab_title" \
@@ -110,6 +111,7 @@ jq -n \
         cost_usd: $cost,
         last_updated: $ts,
         tty: $tty,
+        pid: $pid,
         tmux_target: $tmux,
         tmux_window_name: $tmux_wname,
         tab_title: $tab_title,

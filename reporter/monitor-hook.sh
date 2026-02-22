@@ -16,6 +16,18 @@ state_file="$MONITOR_DIR/.${session_id}.state"
 # Ensure previous state file exists for slurpfile
 [ ! -f "$state_file" ] && echo '{}' > "$state_file"
 
+# Handle late notification_permission: suppress if session already moved to working.
+# Notification(permission_prompt) fires ~6s after PermissionRequest. If the user already
+# approved (PreToolUse set state to "working"), this late notification would incorrectly
+# revert the state to waiting_permission. Skip the write in that case.
+if [ "$state" = "notification_permission" ]; then
+    prev_state=$(jq -r '.state // ""' "$state_file" 2>/dev/null || echo "")
+    if [ "$prev_state" = "working" ]; then
+        exit 0
+    fi
+    state="waiting_permission"
+fi
+
 # Single jq call: compute context + last_message + merge with previous, output final state JSON
 tmp_file="$MONITOR_DIR/.${session_id}.state.tmp"
 echo "$input" | jq -n \
