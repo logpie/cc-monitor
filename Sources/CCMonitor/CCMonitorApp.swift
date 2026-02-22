@@ -1,5 +1,4 @@
 import SwiftUI
-import ServiceManagement
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -50,27 +49,5 @@ struct CCMonitorApp: App {
             }
         }
         .menuBarExtraStyle(.window)
-
-        Settings {
-            VStack(spacing: 12) {
-                Toggle("Launch at Login", isOn: Binding(
-                    get: { SMAppService.mainApp.status == .enabled },
-                    set: { newValue in
-                        do {
-                            if newValue {
-                                try SMAppService.mainApp.register()
-                            } else {
-                                try SMAppService.mainApp.unregister()
-                            }
-                        } catch {
-                            print("Failed to update login item: \(error)")
-                        }
-                    }
-                ))
-
-            }
-            .padding()
-            .frame(width: 250, height: 80)
-        }
     }
 }

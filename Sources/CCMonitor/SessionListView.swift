@@ -1,4 +1,5 @@
 import SwiftUI
+import ServiceManagement
 
 struct SessionListView: View {
     @ObservedObject var monitor: SessionMonitor
@@ -6,6 +7,7 @@ struct SessionListView: View {
     @AppStorage("colorTheme") private var themeRaw = ColorTheme.dracula.rawValue
     @AppStorage("panelOpacity") private var panelOpacity = 0.82
     @State private var showThemePicker = false
+    @State private var showSettings = false
 
     private var theme: ColorTheme { ColorTheme(rawValue: themeRaw) ?? .dracula }
 
@@ -144,13 +146,37 @@ struct SessionListView: View {
                 }
 
                 Button {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    showSettings.toggle()
                 } label: {
                     Image(systemName: "gearshape")
                         .font(.system(size: 10))
                         .foregroundStyle(theme.accent)
                 }
                 .buttonStyle(.plain)
+                .popover(isPresented: $showSettings, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle("Launch at Login", isOn: Binding(
+                            get: { SMAppService.mainApp.status == .enabled },
+                            set: { newValue in
+                                do {
+                                    if newValue {
+                                        try SMAppService.mainApp.register()
+                                    } else {
+                                        try SMAppService.mainApp.unregister()
+                                    }
+                                } catch {
+                                    print("Failed to update login item: \(error)")
+                                }
+                            }
+                        ))
+                        .font(.caption2)
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                    }
+                    .padding(10)
+                    .frame(width: 170)
+                    .background(theme.panelBackground(opacity: panelOpacity))
+                }
 
                 Button {
                     NSWorkspace.shared.open(URL(string: "https://claude.ai/settings/usage")!)
