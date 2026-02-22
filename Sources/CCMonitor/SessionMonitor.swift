@@ -208,6 +208,48 @@ final class SessionMonitor: ObservableObject {
             }
         }
 
+        // Deduplicate: when multiple sessions share the same PID or same TTY,
+        // keep only the newest (highest lastUpdated). This handles:
+        // - Same PID: Claude started a new conversation in the same process
+        // - Same TTY: Old session without PID shares TTY with current session
+        do {
+            // Sort indices by lastUpdated descending so first-seen wins
+            let sortedIndices = sessions.indices.sorted { sessions[$0].lastUpdated > sessions[$1].lastUpdated }
+            var claimedPid: Set<UInt32> = []
+            var claimedTty: Set<String> = []
+            var duplicateIndices: Set<Int> = []
+
+            for i in sortedIndices {
+                let s = sessions[i]
+                var isDup = false
+
+                if let pid = s.pid {
+                    if claimedPid.contains(pid) { isDup = true }
+                    else { claimedPid.insert(pid) }
+                }
+
+                if !isDup, let tty = s.tty, !tty.isEmpty {
+                    if claimedTty.contains(tty) { isDup = true }
+                    else { claimedTty.insert(tty) }
+                }
+
+                if isDup {
+                    duplicateIndices.insert(i)
+                    let sid = s.sessionId
+                    toDelete.append(dir.appendingPathComponent("\(sid).json"))
+                    toDelete.append(dir.appendingPathComponent(".\(sid).state"))
+                    updatedCache.removeValue(forKey: sid)
+                    if let pid = s.pid { updatedPidStartTimes.removeValue(forKey: pid) }
+                }
+            }
+
+            if !duplicateIndices.isEmpty {
+                sessions = sessions.enumerated()
+                    .filter { !duplicateIndices.contains($0.offset) }
+                    .map { $0.element }
+            }
+        }
+
         sessions.sort { $0.lastUpdated > $1.lastUpdated }
         return LoadResult(sessions: sessions, updatedCache: updatedCache, updatedPidStartTimes: updatedPidStartTimes, toDelete: toDelete)
     }

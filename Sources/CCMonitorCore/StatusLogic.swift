@@ -18,19 +18,19 @@ public enum HookState: String {
     case compacting
 }
 
-/// If hook state says "working" but the hook file hasn't been modified in this many
-/// seconds, the Stop hook likely didn't fire (or user pressed Escape and idle_prompt
-/// also failed). Combined with reporterStaleThreshold to avoid false idle during
-/// streaming — reporter fires every ~3-7s, keeping age fresh.
-/// Trade-off: extended thinking >7s without tools may briefly show idle (self-corrects).
+/// General fallback: if hook says "working" but both hook file and reporter JSON are
+/// stale for this long, session is likely idle. Covers extended thinking and edge cases.
 public let hookStaleThresholdSeconds: TimeInterval = 7
 
-/// During active streaming or tool execution, the statusLine reporter writes the JSON
-/// every ~3-7 seconds, keeping age low. If age exceeds this threshold, the reporter has
-/// stopped — meaning Claude is no longer actively streaming. Combined with hookAge
-/// staleness, this confirms the session is truly idle rather than mid-stream.
-/// Tight margin at 7s reporter gap — age=7 is not > 7 (strict), but gaps >7s risk false idle.
+/// General fallback reporter staleness (same use as hookStaleThresholdSeconds).
 public let reporterStaleThresholdSeconds: TimeInterval = 7
+
+/// Fast-path threshold: when the reporter WAS actively updating (streaming) but then
+/// stopped, detect idle sooner. Only applies when reporter updated more recently than
+/// the hook file (proving streaming occurred after the last tool/event).
+/// Trade-off: during 7s reporter gaps, age may briefly exceed 6 causing ~0.5s false idle.
+/// Reporter fires every 3-7s, so age typically peaks at 5-7. Strict > keeps age=6 safe.
+public let streamStopStaleSeconds: TimeInterval = 6
 
 /// Compute status from hook state (preferred) or fall back to time-based.
 /// - hookAge: seconds since hook state file was last modified
@@ -47,17 +47,24 @@ public func computeStatus(hookState: HookState?, hookAge: TimeInterval? = nil, a
         case .compacting:
             return .working
         case .working:
-            // Stale "working" — detect when Stop hook didn't fire.
-            // Two conditions must BOTH be true:
-            //   1. hookAge > 7s: no PreToolUse in 7s (hook file stale)
-            //   2. age > 7s: no statusLine reporter in 7s (JSON stale)
-            // During streaming/tool execution, the reporter fires every ~3-7s
-            // keeping age fresh, which prevents false idle. Once streaming
-            // stops, both ages grow past threshold within seconds.
-            if let hookAge = hookAge,
-               hookAge > hookStaleThresholdSeconds,
-               age > reporterStaleThresholdSeconds {
-                return processAlive ? .idle : .disconnected
+            if let hookAge = hookAge {
+                // Fast path: reporter was updating AFTER the last hook event,
+                // meaning streaming was active. If reporter then goes stale,
+                // streaming likely stopped (user pressed Escape).
+                // hookAge > age + 2 requires reporter fired ≥2s after hook,
+                // proving sustained streaming (not just a single coincidental fire).
+                // This protects extended thinking from premature fast-path idle.
+                let reporterFresherThanHook = hookAge > age + 2.0
+                if reporterFresherThanHook && age > streamStopStaleSeconds {
+                    return processAlive ? .idle : .disconnected
+                }
+
+                // General fallback: both hook file and reporter JSON are stale.
+                // Covers extended thinking (no streaming yet) and edge cases.
+                if hookAge > hookStaleThresholdSeconds,
+                   age > reporterStaleThresholdSeconds {
+                    return processAlive ? .idle : .disconnected
+                }
             }
             return .working
         case .waitingPermission, .waitingInput:

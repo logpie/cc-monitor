@@ -331,12 +331,11 @@ do {
         // T=15: session finishes, Stop FAILS, no more events
     ]
 
-    // hookAge > 7 at T=12.001 (from T=5). age > 7 at T=21.001 (from T=14).
-    // Detection at max(12, 21) ≈ T=22.
+    // Fast path: hookAge > age+2 (reporter was streaming), age > 6.
+    // hookAge=16 > age=7+2=9 at T=21. age=7 > 6. Detection at T=21.
     check(statusAt(15, events: events) == .working, "LAG2 T=15: hookAge=10, age=1")
-    check(statusAt(20, events: events) == .working, "LAG2 T=20: hookAge=15, age=6 < 7")
-    check(statusAt(21, events: events) == .working, "LAG2 T=21: age=7, at threshold")
-    check(statusAt(22, events: events) == .idle,    "LAG2 T=22: stale detected → idle")
+    check(statusAt(20, events: events) == .working, "LAG2 T=20: hookAge=15, age=6 (not > 6)")
+    check(statusAt(21, events: events) == .idle,    "LAG2 T=21: fast path → idle")
 }
 
 section("LAG3: Broken Stop, reporter fires late — still detect within reasonable time")
@@ -352,11 +351,11 @@ do {
         // No more events
     ]
 
-    // hookAge > 7 at T=12 (from T=5). age > 7 at T=25 (from T=18).
-    // Detection at max(12, 25) ≈ T=26.
+    // Fast path: hookAge-age = 13 > 2 (reporter streamed after hook), age > 6.
+    // age > 6 at T=25 (from T=18). Detection at T=25.
     check(statusAt(22, events: events) == .working, "LAG3 T=22: age=4 (not yet stale)")
-    check(statusAt(25, events: events) == .working, "LAG3 T=25: age=7, at threshold")
-    check(statusAt(26, events: events) == .idle,    "LAG3 T=26: detected despite late reporter")
+    check(statusAt(24, events: events) == .working, "LAG3 T=24: age=6, at fast-path threshold")
+    check(statusAt(25, events: events) == .idle,    "LAG3 T=25: fast path → idle")
 }
 
 // ============================================================
@@ -392,11 +391,11 @@ do {
         // T=12: User presses Escape. NO hooks fire at all.
     ]
 
-    // hookAge > 7 at T=12 (from T=5). age > 7 at T=18 (from T=11).
-    // Detection at max(12, 18) ≈ T=19.
+    // Fast path: hookAge-age = 6 > 2 (reporter streamed after hook), age > 6.
+    // age > 6 at T=18 (from T=11). Detection at T=18.
     check(statusAt(15, events: events) == .working, "SP2 T=15: hookAge=10, age=4")
-    check(statusAt(18, events: events) == .working, "SP2 T=18: age=7, at threshold")
-    check(statusAt(19, events: events) == .idle,    "SP2 T=19: staleness fallback → idle")
+    check(statusAt(17, events: events) == .working, "SP2 T=17: age=6, at fast-path threshold")
+    check(statusAt(18, events: events) == .idle,    "SP2 T=18: fast path → idle")
 }
 
 section("SP3: Ctrl+C kills process")
@@ -452,11 +451,11 @@ do {
     ]
 
     check(statusAt(128, events: events) == .working, "SP5 T=128: post-compact tool")
-    check(statusAt(135, events: events) == .working, "SP5 T=135: hookAge=7, at threshold")
-    // hookAge > 7 at T=135 (from T=128). age > 7 at T=143 (from T=136).
-    // Detection at max(135, 143) ≈ T=144.
-    check(statusAt(143, events: events) == .working, "SP5 T=143: age=7, at threshold")
-    check(statusAt(144, events: events) == .idle,    "SP5 T=144: hookAge=16, age=8 → idle")
+    check(statusAt(135, events: events) == .working, "SP5 T=135: hookAge=7, age still fresh")
+    // Fast path: hookAge-age = 8 > 2 (reporter streamed after hook), age > 6.
+    // age > 6 at T=143 (from T=136). Detection at T=143.
+    check(statusAt(142, events: events) == .working, "SP5 T=142: age=6, at fast-path threshold")
+    check(statusAt(143, events: events) == .idle,    "SP5 T=143: fast path → idle")
 }
 
 section("SP6: Escape during tool execution")
@@ -629,18 +628,18 @@ do {
         // Stop FAILS again.
     ]
 
-    // Turn 1: hookAge > 7 at T=12, age > 7 at T=18. idle at max(12, 18) ≈ T=19.
-    // Turn 2: hookAge > 7 at T=70, age > 7 at T=76. idle at max(70, 76) ≈ T=77.
+    // Turn 1: Fast path hookAge-age=6 > 2, age > 6 at T=18. idle at T=18.
+    // Turn 2: Fast path hookAge-age=6 > 2, age > 6 at T=76. idle at T=76.
     verify(events, [
         Expect(t: 5,  status: .working, reason: "turn 1 tool"),
         Expect(t: 15, status: .working, reason: "turn 1 hookAge=10, age=4"),
-        Expect(t: 18, status: .working, reason: "turn 1 age=7 (threshold)"),
-        Expect(t: 19, status: .idle,    reason: "turn 1 hookAge=14, age=8 → idle"),
+        Expect(t: 17, status: .working, reason: "turn 1 age=6 (fast-path threshold)"),
+        Expect(t: 18, status: .idle,    reason: "turn 1 fast path → idle"),
         Expect(t: 50, status: .idle,    reason: "between turns"),
         Expect(t: 60, status: .working, reason: "turn 2 prompt"),
         Expect(t: 63, status: .working, reason: "turn 2 tool"),
-        Expect(t: 76, status: .working, reason: "turn 2 age=7 (threshold)"),
-        Expect(t: 77, status: .idle,    reason: "turn 2 hookAge=14, age=8 → idle"),
+        Expect(t: 75, status: .working, reason: "turn 2 age=6 (fast-path threshold)"),
+        Expect(t: 76, status: .idle,    reason: "turn 2 fast path → idle"),
     ], label: "SIM4")
 }
 
@@ -718,12 +717,21 @@ check(computeStatus(hookState: .working, hookAge: 6.999, age: 20, processAlive: 
 check(computeStatus(hookState: .working, hookAge: 7.0,  age: 20, processAlive: true) == .working, "hookAge=7.0 → working (not >)")
 check(computeStatus(hookState: .working, hookAge: 7.001, age: 20, processAlive: true) == .idle,   "hookAge=7.001 age=20 → idle")
 
-section("Unit: age threshold for staleness (age must also exceed threshold)")
-check(computeStatus(hookState: .working, hookAge: 60, age: 0, processAlive: true) == .working,  "hookAge=60 age=0 → working (reporter just fired)")
+section("Unit: age threshold — fast path (reporter was streaming, hookAge >> age)")
+check(computeStatus(hookState: .working, hookAge: 60, age: 0, processAlive: true) == .working,  "hookAge=60 age=0 → working")
 check(computeStatus(hookState: .working, hookAge: 60, age: 5, processAlive: true) == .working,  "hookAge=60 age=5 → working")
-check(computeStatus(hookState: .working, hookAge: 60, age: 6, processAlive: true) == .working,  "hookAge=60 age=6 → working")
-check(computeStatus(hookState: .working, hookAge: 60, age: 7, processAlive: true) == .working,  "hookAge=60 age=7 → working (not >)")
+check(computeStatus(hookState: .working, hookAge: 60, age: 6, processAlive: true) == .working,  "hookAge=60 age=6 → working (not > 6)")
+check(computeStatus(hookState: .working, hookAge: 60, age: 7, processAlive: true) == .idle,     "hookAge=60 age=7 → idle (fast path, age > 6)")
 check(computeStatus(hookState: .working, hookAge: 60, age: 8, processAlive: true) == .idle,     "hookAge=60 age=8 → idle")
+
+section("Unit: age threshold — general fallback (reporter NOT streaming, hookAge ≈ age)")
+check(computeStatus(hookState: .working, hookAge: 8, age: 7, processAlive: true) == .working,     "hookAge=8 age=7 → working (age not > 7)")
+check(computeStatus(hookState: .working, hookAge: 8.001, age: 7.001, processAlive: true) == .idle, "hookAge=8.001 age=7.001 → idle")
+
+section("Unit: fast path boundary — hookAge must exceed age + 2")
+check(computeStatus(hookState: .working, hookAge: 9, age: 7, processAlive: true) == .working,     "hookAge-age=2, exactly at boundary → working")
+check(computeStatus(hookState: .working, hookAge: 9.001, age: 7, processAlive: true) == .idle,    "hookAge-age=2.001, past boundary → idle (fast path)")
+check(computeStatus(hookState: .working, hookAge: 8, age: 7, processAlive: true) == .working,     "hookAge-age=1, no fast path → working")
 
 section("Unit: stale working + dead process → disconnected")
 check(computeStatus(hookState: .working, hookAge: 8, age: 8, processAlive: false) == .disconnected, "stale + dead → disconnected")
@@ -782,6 +790,7 @@ check(AgentStatus.displayOrder == [.attention, .working, .idle, .disconnected], 
 section("Thresholds")
 check(hookStaleThresholdSeconds == 7, "hookStale=7")
 check(reporterStaleThresholdSeconds == 7, "reporterStale=7")
+check(streamStopStaleSeconds == 6, "streamStop=6")
 check(workingThresholdSeconds == 3, "working=3")
 check(livenessCheckThresholdSeconds == 5, "liveness=5")
 check(deadCleanupThresholdSeconds == 300, "cleanup=300")
