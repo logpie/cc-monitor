@@ -144,6 +144,15 @@ struct SessionListView: View {
                 }
 
                 Button {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 10))
+                        .foregroundStyle(theme.accent)
+                }
+                .buttonStyle(.plain)
+
+                Button {
                     NSWorkspace.shared.open(URL(string: "https://claude.ai/settings/usage")!)
                 } label: {
                     Text("Usage")

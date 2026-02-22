@@ -164,6 +164,16 @@ CC Monitor infers session state from hook events and file timestamps. Most trans
 
 **Design priority:** "Needs Input" (permission/input prompts) is the highest-priority signal and has zero false positives — if the menu bar says a session needs attention, it genuinely does. The trade-off is that brief false "Ready" during extended thinking is accepted as cosmetic.
 
+## Known limitations
+
+These are caused by gaps in Claude Code's upstream hook system, not by CC Monitor itself:
+
+- **No `Stop` hook on user interrupt (Escape/Ctrl+C):** Claude Code does not fire the `Stop` hook when the user interrupts a response. CC Monitor falls back to staleness detection (~12s). If `Notification(idle_prompt)` fires, detection is instant.
+- **No "permission approved" event:** When the user approves a permission prompt, Claude Code fires `PreToolUse` (which transitions to "Working"), but there is no dedicated "approved" event. For long-running tools (e.g., a Bash command that takes minutes), the state correctly shows "Working" after `PreToolUse` fires. However, if `PreToolUse` is delayed or missed, the session may briefly stay on "Needs Input."
+- **Extended thinking is indistinguishable from idle:** During Claude's thinking phase (before streaming starts), no hooks or status updates fire. This looks identical to an idle session from the outside. CC Monitor uses a 12s silence threshold as a compromise — long thinking phases (common with Opus) may briefly show "Ready."
+- **`Notification(permission_prompt)` fires late (~6s):** This upstream notification arrives ~6s after `PermissionRequest`. The hook script suppresses it when the session has already moved past the permission state, but the delay means CC Monitor relies on `PermissionRequest` (which is instant) as the primary signal.
+- **statusLine reporter only fires during streaming:** The reporter that writes session metadata (model, cost, context %) only updates while Claude is actively streaming output. During thinking, tool execution, or idle periods, metadata may be stale.
+
 ## License
 
 MIT
