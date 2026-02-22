@@ -30,16 +30,29 @@ A macOS menu bar app that monitors all your active [Claude Code](https://docs.an
 ## Install
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/logpie/cc-monitor/main/install.sh | bash
+```
+
+This clones the repo, builds the app, installs it to `~/Applications/CCMonitor.app`, sets up hook scripts, and configures `~/.claude/settings.json` automatically.
+
+Or manually:
+
+```bash
 git clone https://github.com/logpie/cc-monitor.git
 cd cc-monitor
 bash install.sh
 ```
 
-This builds the app, installs it to `~/Applications/CCMonitor.app`, and sets up the reporter script.
+After installing, launch the app and grant Accessibility permissions when prompted (needed for terminal tab focusing):
 
-## Setup
+```bash
+open ~/Applications/CCMonitor.app
+```
 
-Add the following to your `~/.claude/settings.json`:
+Restart any active Claude Code sessions to pick up the new hooks.
+
+<details>
+<summary>What the installer configures in ~/.claude/settings.json</summary>
 
 ```json
 {
@@ -49,62 +62,32 @@ Add the following to your `~/.claude/settings.json`:
   },
   "hooks": {
     "UserPromptSubmit": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh working" }]
-      }
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh working" }] }
     ],
     "PreToolUse": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh working" }]
-      }
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh working" }] }
     ],
     "Stop": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh idle" }]
-      }
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh idle" }] }
     ],
     "Notification": [
-      {
-        "matcher": "permission_prompt",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh notification_permission" }]
-      },
-      {
-        "matcher": "idle_prompt",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh idle" }]
-      }
+      { "matcher": "permission_prompt", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh notification_permission" }] },
+      { "matcher": "idle_prompt", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh idle" }] }
     ],
     "PermissionRequest": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh waiting_permission" }]
-      }
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh waiting_permission" }] }
     ],
     "SubagentStart": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh subagent_start" }]
-      }
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh subagent_start" }] }
     ],
     "SubagentStop": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh subagent_stop" }]
-      }
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh subagent_stop" }] }
     ],
     "PreCompact": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh compacting" }]
-      }
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh compacting" }] }
     ],
     "SessionStart": [
-      {
-        "matcher": ".*",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh idle" }]
-      }
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh idle" }] }
     ]
   }
 }
@@ -112,20 +95,7 @@ Add the following to your `~/.claude/settings.json`:
 
 > **Note:** `notification_permission` (not `waiting_permission`) is intentional for `Notification(permission_prompt)`. The hook script suppresses late notification events when the session has already moved to `working` or `idle`, preventing stale "Needs Input" flashing.
 
-Then install the hook script:
-
-```bash
-cp reporter/monitor-hook.sh ~/.claude/monitor-hook.sh
-chmod +x ~/.claude/monitor-hook.sh
-```
-
-Launch the app:
-
-```bash
-open ~/Applications/CCMonitor.app
-```
-
-Grant Accessibility permissions when prompted (needed for terminal tab focusing).
+</details>
 
 ## How it works
 
