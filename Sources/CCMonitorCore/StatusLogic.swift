@@ -19,9 +19,18 @@ public enum HookState: String {
 }
 
 /// If hook state says "working" but the hook file hasn't been modified in this many
-/// seconds, the Stop hook likely didn't fire. During active work, PreToolUse fires
-/// every 10-30s keeping the hook file fresh.
-public let hookStaleThresholdSeconds: TimeInterval = 30
+/// seconds, the Stop hook likely didn't fire (or user pressed Escape and idle_prompt
+/// also failed). Safe to keep at 10s because the dual check with reporterStaleThreshold
+/// prevents false idle during streaming — reporter fires every ~3-7s, keeping age < 8.
+/// Trade-off: extended thinking >10s without tools may briefly show idle (self-corrects).
+public let hookStaleThresholdSeconds: TimeInterval = 10
+
+/// During active streaming or tool execution, the statusLine reporter writes the JSON
+/// every ~3-7 seconds, keeping age low. If age exceeds this threshold, the reporter has
+/// stopped — meaning Claude is no longer actively streaming. Combined with hookAge
+/// staleness, this confirms the session is truly idle rather than mid-stream.
+/// Margin: reporter worst-case gap ~7s, threshold 8 gives 1s margin.
+public let reporterStaleThresholdSeconds: TimeInterval = 8
 
 /// Compute status from hook state (preferred) or fall back to time-based.
 /// - hookAge: seconds since hook state file was last modified
@@ -38,12 +47,16 @@ public func computeStatus(hookState: HookState?, hookAge: TimeInterval? = nil, a
         case .compacting:
             return .working
         case .working:
-            // Stale "working" — hook file hasn't been updated recently.
-            // During active work, PreToolUse fires every 10-30s, keeping the
-            // hook file fresh. If it goes stale, the Stop hook likely didn't
-            // fire and the session is actually idle.
+            // Stale "working" — detect when Stop hook didn't fire.
+            // Two conditions must BOTH be true:
+            //   1. hookAge > 10s: no PreToolUse in 10s (hook file stale)
+            //   2. age > 8s: no statusLine reporter in 8s (JSON stale)
+            // During streaming/tool execution, the reporter fires every ~5s
+            // keeping age < 10, which prevents false idle. Once streaming
+            // stops, age grows past 10 within seconds.
             if let hookAge = hookAge,
-               hookAge > hookStaleThresholdSeconds {
+               hookAge > hookStaleThresholdSeconds,
+               age > reporterStaleThresholdSeconds {
                 return processAlive ? .idle : .disconnected
             }
             return .working

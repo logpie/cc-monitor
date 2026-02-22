@@ -19,6 +19,9 @@ final class SessionMonitor: ObservableObject {
     /// Cached Ghostty tab titles: [tty: title]
     private var tabTitleCache: [String: String] = [:]
 
+    /// Monotonic counter to debounce concurrent loads — only latest load's results apply.
+    private var loadSequence: UInt64 = 0
+
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
         self.monitorDir = home.appendingPathComponent(".claude/monitor")
@@ -65,7 +68,7 @@ final class SessionMonitor: ObservableObject {
     }
 
     private func startLivenessCheck() {
-        livenessTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        livenessTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.loadSessionsAsync(checkLiveness: true)
             }
@@ -78,6 +81,8 @@ final class SessionMonitor: ObservableObject {
     }
 
     private func loadSessionsAsync(checkLiveness: Bool) {
+        loadSequence &+= 1
+        let seq = loadSequence
         let dir = monitorDir
         let cache = livenessCache
         let titleCache = tabTitleCache
@@ -106,7 +111,7 @@ final class SessionMonitor: ObservableObject {
             }
 
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, seq == self.loadSequence else { return }
                 self.sessions = result.sessions
                 self.livenessCache = result.updatedCache
 
