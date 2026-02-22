@@ -94,8 +94,15 @@ final class SessionMonitor: ObservableObject {
         ioQueue.async { [weak self] in
             var result = Self.loadFromDisk(dir: dir, livenessCache: cache, pidStartTimes: pidTimes, checkLiveness: checkLiveness)
 
-            // On liveness check path, also resolve Ghostty tab titles
-            if checkLiveness {
+            // Resolve Ghostty tab titles only for sessions with uncached TTYs.
+            // The tag-and-restore cycle visibly flashes tab titles, so avoid
+            // re-resolving when all sessions already have cached titles.
+            let hasUncached = checkLiveness && result.sessions.contains { s in
+                guard let tty = s.tty, !tty.isEmpty else { return false }
+                if let tmux = s.tmuxTarget, !tmux.isEmpty { return false }
+                return titleCache[tty] == nil
+            }
+            if hasUncached {
                 let newTitles = Self.resolveGhosttyTitles(
                     sessions: result.sessions, titleCache: titleCache)
                 for i in result.sessions.indices {
@@ -120,11 +127,15 @@ final class SessionMonitor: ObservableObject {
                 self.livenessCache = result.updatedCache
                 self.pidStartTimeCache = result.updatedPidStartTimes
 
-                // Update tab title cache
+                // Update tab title cache — mark all non-tmux TTYs as resolved
+                // (even failures) so we don't keep retrying the tag-and-restore cycle
                 if checkLiveness {
                     for s in result.sessions {
-                        if let tty = s.tty, let title = s.ghosttyTabTitle, !title.isEmpty {
+                        guard let tty = s.tty, !tty.isEmpty else { continue }
+                        if let title = s.ghosttyTabTitle, !title.isEmpty {
                             self.tabTitleCache[tty] = title
+                        } else if self.tabTitleCache[tty] == nil, (s.tmuxTarget ?? "").isEmpty {
+                            self.tabTitleCache[tty] = ""  // mark as attempted
                         }
                     }
                 }
@@ -299,9 +310,14 @@ final class SessionMonitor: ObservableObject {
         // Step 3: Read tab titles again to find which tab has which tag
         let taggedTitles = readAllGhosttyTitles()
 
-        // Step 4: Restore TTYs (empty title lets shell precmd restore)
-        for (tty, _) in ttyToTag {
-            writeToTTY(tty, "\u{1b}]2;\u{07}")
+        // Step 4: Restore original titles (don't rely on shell precmd)
+        for (tty, tag) in ttyToTag {
+            if let tagIdx = taggedTitles.firstIndex(where: { $0.contains(tag) }),
+               tagIdx < allTitles.count {
+                writeToTTY(tty, "\u{1b}]2;\(allTitles[tagIdx])\u{07}")
+            } else {
+                writeToTTY(tty, "\u{1b}]2;\u{07}")
+            }
         }
 
         // Step 5: Match tags to original titles by tab position
