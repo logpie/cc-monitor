@@ -169,9 +169,9 @@ final class SessionMonitor: ObservableObject {
                 }
             }
 
-            let hookData = readHookState(dir: dir, sessionId: session.sessionId)
+            let (hookData, hookAge) = readHookState(dir: dir, sessionId: session.sessionId, now: now)
 
-            switch sessionAction(hookState: hookData.state, age: age, processAlive: session.processAlive) {
+            switch sessionAction(hookState: hookData.state, hookAge: hookAge, age: age, processAlive: session.processAlive) {
             case .delete:
                 toDelete.append(url)
                 let stateFile = dir.appendingPathComponent(".\(session.sessionId).state")
@@ -191,12 +191,19 @@ final class SessionMonitor: ObservableObject {
         return LoadResult(sessions: sessions, updatedCache: updatedCache, toDelete: toDelete)
     }
 
-    private nonisolated static func readHookState(dir: URL, sessionId: String) -> HookFileData {
+    private nonisolated static func readHookState(dir: URL, sessionId: String, now: Date) -> (HookFileData, TimeInterval?) {
         let stateFile = dir.appendingPathComponent(".\(sessionId).state")
         guard let content = try? String(contentsOf: stateFile, encoding: .utf8) else {
-            return HookFileData(state: nil, context: nil, lastMessage: nil)
+            return (HookFileData(state: nil, context: nil, lastMessage: nil), nil)
         }
-        return parseHookStateFile(content)
+        let hookAge: TimeInterval?
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: stateFile.path),
+           let mtime = attrs[.modificationDate] as? Date {
+            hookAge = now.timeIntervalSince(mtime)
+        } else {
+            hookAge = nil
+        }
+        return (parseHookStateFile(content), hookAge)
     }
 
     /// Resolve Ghostty tab titles for non-tmux sessions.

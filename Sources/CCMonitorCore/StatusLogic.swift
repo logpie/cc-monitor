@@ -18,8 +18,15 @@ public enum HookState: String {
     case compacting
 }
 
+/// If hook state says "working" but the hook file hasn't been modified in this many
+/// seconds, the Stop hook likely didn't fire. During active work, PreToolUse fires
+/// every 10-30s keeping the hook file fresh.
+public let hookStaleThresholdSeconds: TimeInterval = 30
+
 /// Compute status from hook state (preferred) or fall back to time-based.
-public func computeStatus(hookState: HookState?, age: TimeInterval, processAlive: Bool) -> AgentStatus {
+/// - hookAge: seconds since hook state file was last modified
+/// - age: seconds since last_updated field in JSON (used for time-based fallback and liveness)
+public func computeStatus(hookState: HookState?, hookAge: TimeInterval? = nil, age: TimeInterval, processAlive: Bool) -> AgentStatus {
     // If process is dead, always disconnected
     if !processAlive && age > livenessCheckThresholdSeconds {
         return .disconnected
@@ -28,7 +35,17 @@ public func computeStatus(hookState: HookState?, age: TimeInterval, processAlive
     // If we have a hook state, use it directly
     if let hook = hookState {
         switch hook {
-        case .working, .compacting:
+        case .compacting:
+            return .working
+        case .working:
+            // Stale "working" — hook file hasn't been updated recently.
+            // During active work, PreToolUse fires every 10-30s, keeping the
+            // hook file fresh. If it goes stale, the Stop hook likely didn't
+            // fire and the session is actually idle.
+            if let hookAge = hookAge,
+               hookAge > hookStaleThresholdSeconds {
+                return processAlive ? .idle : .disconnected
+            }
             return .working
         case .waitingPermission, .waitingInput:
             return .attention
@@ -54,11 +71,11 @@ public enum SessionAction {
     case delete
 }
 
-public func sessionAction(hookState: HookState?, age: TimeInterval, processAlive: Bool) -> SessionAction {
+public func sessionAction(hookState: HookState?, hookAge: TimeInterval? = nil, age: TimeInterval, processAlive: Bool) -> SessionAction {
     if !processAlive && age > deadCleanupThresholdSeconds {
         return .delete
     }
-    return .keep(computeStatus(hookState: hookState, age: age, processAlive: processAlive))
+    return .keep(computeStatus(hookState: hookState, hookAge: hookAge, age: age, processAlive: processAlive))
 }
 
 public func sessionAction(age: TimeInterval, processAlive: Bool) -> SessionAction {
