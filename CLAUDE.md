@@ -20,6 +20,8 @@ codesign --force --sign - ~/Applications/CCMonitor.app
 - `Sources/CCMonitor/SessionRowView.swift` — Individual session card UI
 - `Sources/CCMonitor/SessionListView.swift` — Panel layout with grouped sections
 - `Sources/CCMonitor/CCMonitorApp.swift` — App entry point, MenuBarExtra
+- `Sources/CCMonitorCore/Diagnostics.swift` — Shared diagnostic engine (14 checks, auto-repair)
+- `Sources/CCMonitorDoctor/main.swift` — CLI entry point (`cc-monitor-doctor --fix --verbose`)
 - `Tests/CCMonitorTests/SessionStatusTests.swift` — Event-replay simulation tests
 - `~/.claude/monitor-hook.sh` — Hook script (writes .state files, deployed separately)
 - `~/.claude/monitor-reporter.sh` — statusLine reporter (writes .json files)

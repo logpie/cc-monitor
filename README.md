@@ -51,6 +51,20 @@ open ~/Applications/CCMonitor.app
 
 Restart any active Claude Code sessions to pick up the new hooks.
 
+## Troubleshooting
+
+CC Monitor ships with a diagnostic tool that checks your installation health and can auto-repair most issues:
+
+```bash
+cc-monitor-doctor           # Check for problems
+cc-monitor-doctor --verbose # Show all checks (including passing)
+cc-monitor-doctor --fix     # Auto-repair fixable issues
+```
+
+It verifies: dependencies (jq, git), hook scripts installed and executable, settings.json configured correctly, monitor directory writable, Accessibility permissions, data file integrity, and hook script versions.
+
+If the app detects issues on startup, a yellow warning triangle appears in the footer bar — click it for instructions.
+
 <details>
 <summary>What the installer configures in ~/.claude/settings.json</summary>
 
