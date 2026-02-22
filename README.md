@@ -69,7 +69,7 @@ Add the following to your `~/.claude/settings.json`:
     "Notification": [
       {
         "matcher": "permission_prompt",
-        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh waiting_permission" }]
+        "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh notification_permission" }]
       },
       {
         "matcher": "idle_prompt",
@@ -109,6 +109,10 @@ Add the following to your `~/.claude/settings.json`:
   }
 }
 ```
+
+`notification_permission` is intentional for `Notification(permission_prompt)`: the hook
+script suppresses late notification events if the session has already returned to
+`working`, which prevents stale attention-state regressions.
 
 Then install the hook script:
 
