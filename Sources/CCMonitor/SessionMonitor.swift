@@ -220,7 +220,14 @@ final class SessionMonitor: ObservableObject {
 
             let (hookData, hookAge) = readHookState(dir: dir, sessionId: session.sessionId, now: now)
 
-            switch sessionAction(hookState: hookData.state, hookAge: hookAge, age: age, processAlive: session.processAlive, hasActiveAgents: !hookData.activeAgents.isEmpty) {
+            // MCP tools (e.g. mcp__codex__codex) are long-running external calls that
+            // produce no intermediate events. Suppress idle fallback like subagents.
+            // No timeout: MCP calls (e.g. Codex) can legitimately run 15+ minutes.
+            // If the process dies, liveness check handles it. If Stop fires, state
+            // goes to idle and this flag is irrelevant (only checked in .working case).
+            let isLongRunning = hookData.context?.hasPrefix("mcp__") == true
+
+            switch sessionAction(hookState: hookData.state, hookAge: hookAge, age: age, processAlive: session.processAlive, hasActiveAgents: !hookData.activeAgents.isEmpty, hasLongRunningTool: isLongRunning) {
             case .delete:
                 toDelete.append(url)
                 let stateFile = dir.appendingPathComponent(".\(session.sessionId).state")

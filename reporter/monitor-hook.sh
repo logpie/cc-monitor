@@ -116,8 +116,11 @@ echo "$input" | jq -n \
     (if $new_msg != "" then $new_msg else ($p.last_message // "") end) as $msg |
 
     # Manage agents array for subagent lifecycle
+    # Clear agents on terminal states (idle, session_start) to prevent stale entries
+    # from rejected/crashed subagents that never fired SubagentStop.
     ($p.agents // []) as $prev_agents |
-    (if $state == "subagent_start" then
+    (if $state == "idle" then []
+    elif $state == "subagent_start" then
         ($in.agent_id // "") as $aid |
         ($in.agent_type // "") as $atype |
         if $aid != "" then
