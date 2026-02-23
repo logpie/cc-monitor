@@ -11,6 +11,7 @@ session_id=$(echo "$input" | jq -r '.session_id // empty')
 [ -z "$session_id" ] && exit 0
 
 MONITOR_DIR="$HOME/.claude/monitor"
+mkdir -p "$MONITOR_DIR"
 state_file="$MONITOR_DIR/.${session_id}.state"
 
 # --- Per-session lock (mkdir is atomic on all POSIX systems) ---
@@ -32,7 +33,6 @@ attempts=0
 while ! mkdir "$lockdir" 2>/dev/null; do
     attempts=$((attempts + 1))
     if [ $attempts -gt 100 ]; then
-        # Check if lock holder is still alive
         holder=$(cat "$lockpid" 2>/dev/null || echo "")
         if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
             # Holder is dead — safe to steal
@@ -41,23 +41,28 @@ while ! mkdir "$lockdir" 2>/dev/null; do
             if mkdir "$lockdir" 2>/dev/null; then
                 break
             fi
+        elif [ -z "$holder" ]; then
+            # No PID file — orphaned lock (holder crashed before writing PID)
+            rmdir "$lockdir" 2>/dev/null || true
+            if mkdir "$lockdir" 2>/dev/null; then
+                break
+            fi
         fi
-        # Holder alive or steal failed — give up, run unlocked
-        # (better than blocking a hook indefinitely)
-        break
+        # Holder alive or steal failed — drop this event (safe: next event will retry)
+        exit 0
     fi
     sleep 0.01
 done
-
-if [ -d "$lockdir" ]; then
-    echo $$ > "$lockpid"
-    got_lock=true
-fi
+# Lock acquired — always write PID
+echo $$ > "$lockpid"
+got_lock=true
 
 # --- Critical section (read-modify-write under lock) ---
 
 # Ensure previous state file exists for slurpfile (no-truncate create)
-[ ! -f "$state_file" ] && printf '{}' > "$state_file"
+if [ ! -f "$state_file" ] || ! jq -e . "$state_file" >/dev/null 2>&1; then
+    printf '{}' > "$state_file"
+fi
 
 # Handle late notification_permission: suppress if session already moved to working.
 # Notification(permission_prompt) fires ~6s after PermissionRequest. If the user already
@@ -66,7 +71,7 @@ fi
 # Safe from TOCTOU: lock ensures no concurrent write between read and exit.
 if [ "$state" = "notification_permission" ]; then
     prev_state=$(jq -r '.state // ""' "$state_file" 2>/dev/null || echo "")
-    if [ "$prev_state" = "working" ]; then
+    if [ "$prev_state" != "waiting_permission" ]; then
         exit 0
     fi
     state="waiting_permission"

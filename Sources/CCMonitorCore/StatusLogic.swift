@@ -9,6 +9,11 @@ public let livenessCheckThresholdSeconds: TimeInterval = 5
 /// Seconds after which dead sessions' files are cleaned up.
 public let deadCleanupThresholdSeconds: TimeInterval = 300
 
+/// Seconds after which attention states (waiting_permission/waiting_input) fall back to idle.
+/// Prevents permanent stuck state if hooks break after user takes action.
+/// 600s (10 min) is long enough to not affect legitimate AFK users.
+public let attentionStaleThresholdSeconds: TimeInterval = 600
+
 /// Hook states written by monitor-hook.sh
 public enum HookState: String {
     case working
@@ -58,7 +63,10 @@ public func computeStatus(hookState: HookState?, hookAge: TimeInterval? = nil, a
                     // Streaming was proven active. If reporter goes stale,
                     // streaming stopped (user pressed Escape or response ended).
                     if age > streamStopStaleSeconds {
-                        return processAlive ? .idle : .disconnected
+                        if !hasActiveAgents && !hasLongRunningTool {
+                            return processAlive ? .idle : .disconnected
+                        }
+                        // else: agents/tools active, streaming pause is expected → fall through to .working
                     }
                 } else if !hasActiveAgents && !hasLongRunningTool {
                     // No streaming since last hook → likely thinking phase.
@@ -74,6 +82,9 @@ public func computeStatus(hookState: HookState?, hookAge: TimeInterval? = nil, a
             }
             return .working
         case .waitingPermission, .waitingInput:
+            if let hookAge = hookAge, hookAge > attentionStaleThresholdSeconds {
+                return processAlive ? .idle : .disconnected
+            }
             return .attention
         case .idle:
             return .idle

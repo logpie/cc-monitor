@@ -231,7 +231,7 @@ do {
     check(statusAt(185, events: events) == .idle, "FP4 T=185: compacting done")
 }
 
-section("FP5: Permission/input wait — immune to staleness at any duration")
+section("FP5: Permission/input wait — immune to staleness up to 600s timeout")
 do {
     let events: [SimEvent] = [
         SimEvent(time: 0,   kind: .hook(.idle)),
@@ -239,11 +239,9 @@ do {
         SimEvent(time: 4,   kind: .hook(.waitingPermission)),
     ]
 
-    // Must stay attention indefinitely — user may be AFK, and hiding the
+    // Must stay attention for up to 600s — user may be AFK, and hiding the
     // reminder would be worse than a false positive during tool execution.
-    // Known limitation: after user approves a long tool (no "approved" event),
-    // state stays waiting_permission until PostToolUse fires.
-    for t in stride(from: 4.0, through: 600.0, by: 30.0) {
+    for t in stride(from: 4.0, through: 599.0, by: 30.0) {
         let s = statusAt(t, events: events)
         check(s == .attention, "FP5 T=\(Int(t))s: waiting permission, must be attention (got \(s))")
     }
@@ -793,9 +791,11 @@ do {
           "THINK6: agents active, both > 12 → still working")
     check(computeStatus(hookState: .working, hookAge: 120, age: 120, processAlive: true, hasActiveAgents: true) == .working,
           "THINK6: agents active, 120s → still working")
-    // Streaming fast-path is NOT affected by agents (if reporter proved streaming then stopped)
-    check(computeStatus(hookState: .working, hookAge: 60, age: 10, processAlive: true, hasActiveAgents: true) == .idle,
-          "THINK6: streaming stopped, agents don't override fast-path")
+    // Streaming fast-path IS now suppressed by agents (if agents are active, streaming pause is expected)
+    check(computeStatus(hookState: .working, hookAge: 60, age: 10, processAlive: true, hasActiveAgents: true) == .working,
+          "THINK6: streaming stopped but agents active → still working")
+    check(computeStatus(hookState: .working, hookAge: 60, age: 10, processAlive: true, hasLongRunningTool: true) == .working,
+          "THINK6: streaming stopped but MCP active → still working")
 }
 
 // ============================================================
@@ -835,8 +835,8 @@ check(computeStatus(hookState: .working, hookAge: nil, age: 600, processAlive: t
 
 section("Unit: staleness only applies to .working state")
 check(computeStatus(hookState: .idle,              hookAge: 300, age: 300, processAlive: true) == .idle,      "idle: immune")
-check(computeStatus(hookState: .waitingPermission, hookAge: 300, age: 300, processAlive: true) == .attention, "waitingPermission: immune")
-check(computeStatus(hookState: .waitingInput,      hookAge: 300, age: 300, processAlive: true) == .attention, "waitingInput: immune")
+check(computeStatus(hookState: .waitingPermission, hookAge: 300, age: 300, processAlive: true) == .attention, "waitingPermission: immune (under 600s)")
+check(computeStatus(hookState: .waitingInput,      hookAge: 300, age: 300, processAlive: true) == .attention, "waitingInput: immune (under 600s)")
 check(computeStatus(hookState: .compacting,        hookAge: 300, age: 300, processAlive: true) == .working,   "compacting: immune")
 
 section("Unit: sessionAction passes hookAge correctly")
@@ -889,6 +889,7 @@ check(streamStopStaleSeconds == 6, "streamStop=6")
 check(workingThresholdSeconds == 3, "working=3")
 check(livenessCheckThresholdSeconds == 5, "liveness=5")
 check(deadCleanupThresholdSeconds == 300, "cleanup=300")
+check(attentionStaleThresholdSeconds == 600, "attentionStale=600")
 
 // ============================================================
 // MARK: - PERMISSION RACE AND PID TESTS
@@ -964,6 +965,64 @@ do {
     // Young session (age < threshold) — process assumed alive regardless
     check(computeStatus(hookState: .working, hookAge: 0, age: 2, processAlive: false) == .working,
           "young session: processAlive ignored")
+}
+
+// ============================================================
+// MARK: - NEW TESTS (adversarial review fixes)
+// ============================================================
+
+section("RACE3: Late notification_permission when session already idle — suppressed")
+do {
+    // PermissionRequest → waiting_permission → approved → working → Stop → idle
+    // Late notification_permission arrives after idle — must NOT revert to attention.
+    // (The hook script now only allows notification_permission through when
+    // prev_state == "waiting_permission". All other states = stale → skip.)
+    let events: [SimEvent] = [
+        SimEvent(time: 0,  kind: .hook(.idle)),
+        SimEvent(time: 5,  kind: .hook(.waitingPermission)),  // PermissionRequest
+        SimEvent(time: 8,  kind: .hook(.working)),            // User approves
+        SimEvent(time: 12, kind: .hook(.idle)),               // Stop
+        // T=14: Late notification_permission — hook sees prev_state="idle", suppresses
+        // (no event here because the write is skipped)
+    ]
+
+    check(statusAt(5,  events: events) == .attention, "RACE3 T=5: permission requested")
+    check(statusAt(8,  events: events) == .working,   "RACE3 T=8: approved → working")
+    check(statusAt(12, events: events) == .idle,       "RACE3 T=12: stop → idle")
+    check(statusAt(14, events: events) == .idle,       "RACE3 T=14: late notification suppressed, still idle")
+    check(statusAt(30, events: events) == .idle,       "RACE3 T=30: remains idle")
+}
+
+section("FP8: Streaming fast-path with active agents — must NOT show idle")
+do {
+    // Agent running, reporter was streaming but stopped → stay working.
+    // Before fix 2a, fast-path would return idle even with active agents.
+    check(computeStatus(hookState: .working, hookAge: 60, age: 10, processAlive: true, hasActiveAgents: true) == .working,
+          "FP8: agents active, fast-path suppressed → working")
+    check(computeStatus(hookState: .working, hookAge: 60, age: 10, processAlive: true, hasLongRunningTool: true) == .working,
+          "FP8: MCP active, fast-path suppressed → working")
+    // Without agents/MCP, fast-path still works normally
+    check(computeStatus(hookState: .working, hookAge: 60, age: 10, processAlive: true) == .idle,
+          "FP8: no agents/MCP, fast-path → idle")
+}
+
+section("ATT1: Attention state timeout — 600s staleness → idle")
+do {
+    // waiting_permission for >600s → falls back to idle (hooks probably broken)
+    check(computeStatus(hookState: .waitingPermission, hookAge: 599, age: 599, processAlive: true) == .attention,
+          "ATT1: 599s → still attention")
+    check(computeStatus(hookState: .waitingPermission, hookAge: 600, age: 600, processAlive: true) == .attention,
+          "ATT1: 600s → still attention (not > 600)")
+    check(computeStatus(hookState: .waitingPermission, hookAge: 601, age: 601, processAlive: true) == .idle,
+          "ATT1: 601s → idle (stale attention)")
+    check(computeStatus(hookState: .waitingPermission, hookAge: 601, age: 601, processAlive: false) == .disconnected,
+          "ATT1: 601s + dead → disconnected")
+    // Same for waitingInput
+    check(computeStatus(hookState: .waitingInput, hookAge: 601, age: 601, processAlive: true) == .idle,
+          "ATT1: waitingInput 601s → idle")
+    // nil hookAge → no staleness check, stays attention
+    check(computeStatus(hookState: .waitingPermission, hookAge: nil, age: 700, processAlive: true) == .attention,
+          "ATT1: nil hookAge → attention (no staleness check)")
 }
 
 // ============================================================

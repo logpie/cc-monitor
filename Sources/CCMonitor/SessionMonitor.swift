@@ -136,10 +136,14 @@ final class SessionMonitor: ObservableObject {
             }
 
             Task { @MainActor [weak self] in
-                guard let self, seq == self.loadSequence else { return }
+                guard let self else { return }
+                // Always update liveness caches to prevent starvation by debouncing
+                if checkLiveness {
+                    self.livenessCache = result.updatedCache
+                    self.pidStartTimeCache = result.updatedPidStartTimes
+                }
+                guard seq == self.loadSequence else { return }
                 self.sessions = result.sessions
-                self.livenessCache = result.updatedCache
-                self.pidStartTimeCache = result.updatedPidStartTimes
 
                 // Update tab title cache — mark all non-tmux TTYs as resolved
                 // (even failures) so we don't keep retrying the tag-and-restore cycle
@@ -273,11 +277,16 @@ final class SessionMonitor: ObservableObject {
 
                 if isDup {
                     duplicateIndices.insert(i)
-                    let sid = s.sessionId
-                    toDelete.append(dir.appendingPathComponent("\(sid).json"))
-                    toDelete.append(dir.appendingPathComponent(".\(sid).state"))
-                    updatedCache.removeValue(forKey: sid)
-                    if let pid = s.pid { updatedPidStartTimes.removeValue(forKey: pid) }
+                    // Only delete files if process is confirmed dead.
+                    // If still alive (just slow to update), hide from UI but preserve data.
+                    // Dead-session cleanup (age > 300s + dead) handles eventual file cleanup.
+                    if !s.processAlive {
+                        let sid = s.sessionId
+                        toDelete.append(dir.appendingPathComponent("\(sid).json"))
+                        toDelete.append(dir.appendingPathComponent(".\(sid).state"))
+                        updatedCache.removeValue(forKey: sid)
+                        if let pid = s.pid { updatedPidStartTimes.removeValue(forKey: pid) }
+                    }
                 }
             }
 
