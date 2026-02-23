@@ -13,6 +13,9 @@ input=$(cat)
 session_id=$(echo "$input" | jq -r '.session_id // empty')
 [ -z "$session_id" ] && exit 0
 
+# Clean up orphaned tmp file on abnormal exit
+trap 'rm -f "$MONITOR_DIR/.${session_id}.tmp.$$"' EXIT
+
 project_dir=$(echo "$input" | jq -r '.cwd // .workspace.project_dir // empty')
 project_name=$(basename "$project_dir")
 model=$(echo "$input" | jq -r '.model.display_name // "unknown"')
@@ -76,7 +79,7 @@ fi
 now=$(date +%s)
 
 # Write status file (atomic via temp file)
-tmp_file="$MONITOR_DIR/.${session_id}.tmp"
+tmp_file="$MONITOR_DIR/.${session_id}.tmp.$$"
 out_file="$MONITOR_DIR/${session_id}.json"
 
 jq -n \

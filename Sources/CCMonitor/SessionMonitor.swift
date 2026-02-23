@@ -154,9 +154,14 @@ final class SessionMonitor: ObservableObject {
                     }
                 }
 
-                // Clean up files marked for deletion
+                // Clean up files marked for deletion — only if not modified since scan
+                // (prevents deleting files freshly written by a hook/reporter between scan and now)
                 for url in result.toDelete {
-                    try? FileManager.default.removeItem(at: url)
+                    if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+                       let mtime = attrs[.modificationDate] as? Date,
+                       mtime < result.scanTime {
+                        try? FileManager.default.removeItem(at: url)
+                    }
                 }
             }
         }
@@ -167,6 +172,7 @@ final class SessionMonitor: ObservableObject {
         var updatedCache: [String: Bool]
         var updatedPidStartTimes: [UInt32: TimeInterval]
         var toDelete: [URL]
+        var scanTime: Date
     }
 
     /// Pure I/O work — runs off main thread
@@ -176,13 +182,13 @@ final class SessionMonitor: ObservableObject {
         pidStartTimes: [UInt32: TimeInterval],
         checkLiveness: Bool
     ) -> LoadResult {
+        let now = Date()
+
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil
         ) else {
-            return LoadResult(sessions: [], updatedCache: livenessCache, updatedPidStartTimes: pidStartTimes, toDelete: [])
+            return LoadResult(sessions: [], updatedCache: livenessCache, updatedPidStartTimes: pidStartTimes, toDelete: [], scanTime: now)
         }
-
-        let now = Date()
         var updatedCache = livenessCache
         var updatedPidStartTimes = pidStartTimes
         var toDelete: [URL] = []
@@ -276,9 +282,13 @@ final class SessionMonitor: ObservableObject {
         }
 
         sessions.sort { $0.lastUpdated > $1.lastUpdated }
-        return LoadResult(sessions: sessions, updatedCache: updatedCache, updatedPidStartTimes: updatedPidStartTimes, toDelete: toDelete)
+        return LoadResult(sessions: sessions, updatedCache: updatedCache, updatedPidStartTimes: updatedPidStartTimes, toDelete: toDelete, scanTime: now)
     }
 
+    /// Read hook state file content and mtime.
+    /// Order matters for TOCTOU safety: read content first, then stat. If the file is replaced
+    /// between the two ops, hookAge will be too small (file appears fresher than content),
+    /// which keeps the session "working" longer — the safe direction vs false idle.
     private nonisolated static func readHookState(dir: URL, sessionId: String, now: Date) -> (HookFileData, TimeInterval?) {
         let stateFile = dir.appendingPathComponent(".\(sessionId).state")
         guard let content = try? String(contentsOf: stateFile, encoding: .utf8) else {

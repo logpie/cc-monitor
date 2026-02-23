@@ -13,13 +13,57 @@ session_id=$(echo "$input" | jq -r '.session_id // empty')
 MONITOR_DIR="$HOME/.claude/monitor"
 state_file="$MONITOR_DIR/.${session_id}.state"
 
-# Ensure previous state file exists for slurpfile
-[ ! -f "$state_file" ] && echo '{}' > "$state_file"
+# --- Per-session lock (mkdir is atomic on all POSIX systems) ---
+lockdir="$MONITOR_DIR/.${session_id}.lock"
+lockpid="$lockdir/pid"
+got_lock=false
+
+cleanup() {
+    if $got_lock; then
+        rm -f "$lockpid"
+        rmdir "$lockdir" 2>/dev/null || true
+    fi
+    # Clean up orphaned tmp file on abnormal exit
+    rm -f "$MONITOR_DIR/.${session_id}.state.tmp.$$"
+}
+trap cleanup EXIT
+
+attempts=0
+while ! mkdir "$lockdir" 2>/dev/null; do
+    attempts=$((attempts + 1))
+    if [ $attempts -gt 100 ]; then
+        # Check if lock holder is still alive
+        holder=$(cat "$lockpid" 2>/dev/null || echo "")
+        if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
+            # Holder is dead — safe to steal
+            rm -f "$lockpid"
+            rmdir "$lockdir" 2>/dev/null || true
+            if mkdir "$lockdir" 2>/dev/null; then
+                break
+            fi
+        fi
+        # Holder alive or steal failed — give up, run unlocked
+        # (better than blocking a hook indefinitely)
+        break
+    fi
+    sleep 0.01
+done
+
+if [ -d "$lockdir" ]; then
+    echo $$ > "$lockpid"
+    got_lock=true
+fi
+
+# --- Critical section (read-modify-write under lock) ---
+
+# Ensure previous state file exists for slurpfile (no-truncate create)
+[ ! -f "$state_file" ] && printf '{}' > "$state_file"
 
 # Handle late notification_permission: suppress if session already moved to working.
 # Notification(permission_prompt) fires ~6s after PermissionRequest. If the user already
 # approved (PreToolUse set state to "working"), this late notification would incorrectly
 # revert the state to waiting_permission. Skip the write in that case.
+# Safe from TOCTOU: lock ensures no concurrent write between read and exit.
 if [ "$state" = "notification_permission" ]; then
     prev_state=$(jq -r '.state // ""' "$state_file" 2>/dev/null || echo "")
     if [ "$prev_state" = "working" ]; then
