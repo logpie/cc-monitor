@@ -1,4 +1,7 @@
+import AppKit
 import SwiftUI
+
+let systemSounds = ["Glass", "Ping", "Pop", "Purr", "Submarine", "Blow", "Bottle", "Frog", "Funk", "Hero", "Morse", "Sosumi", "Tink", "Basso"]
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -17,6 +20,7 @@ struct CCMonitorApp: App {
     @State private var flashHidden = false
     @State private var flashTimer: Timer?
     @AppStorage("colorTheme") private var themeRaw = ColorTheme.dracula.rawValue
+    @AppStorage("notificationSound") private var notificationSound = "Glass"
 
     private var theme: ColorTheme { ColorTheme(rawValue: themeRaw) ?? .dracula }
 
@@ -37,6 +41,9 @@ struct CCMonitorApp: App {
             ))
             .onChange(of: hasAttention) { needsFlash in
                 if needsFlash {
+                    if !notificationSound.isEmpty, notificationSound != "None" {
+                        NSSound(named: NSSound.Name(notificationSound))?.play()
+                    }
                     flashTimer?.invalidate()
                     flashTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { _ in
                         Task { @MainActor in flashHidden.toggle() }

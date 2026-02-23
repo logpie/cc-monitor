@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import ServiceManagement
 
@@ -6,6 +7,7 @@ struct SessionListView: View {
     var flashAttention: Bool = false
     @AppStorage("colorTheme") private var themeRaw = ColorTheme.dracula.rawValue
     @AppStorage("panelOpacity") private var panelOpacity = 0.82
+    @AppStorage("notificationSound") private var notificationSound = "Glass"
     @State private var showThemePicker = false
     @State private var showSettings = false
     @State private var showHealthPopover = false
@@ -207,6 +209,30 @@ struct SessionListView: View {
                         .font(.caption2)
                         .toggleStyle(.switch)
                         .controlSize(.mini)
+
+                        Rectangle()
+                            .fill(theme.dividerColor)
+                            .frame(height: 1)
+
+                        HStack(spacing: 4) {
+                            Image(systemName: "speaker.wave.2")
+                                .font(.system(size: 8))
+                                .foregroundStyle(theme.secondaryText)
+                            Picker("", selection: $notificationSound) {
+                                Text("None").tag("None")
+                                ForEach(systemSounds, id: \.self) { name in
+                                    Text(name).tag(name)
+                                }
+                            }
+                            .labelsHidden()
+                            .controlSize(.mini)
+                            .frame(maxWidth: .infinity)
+                            .onChange(of: notificationSound) { sound in
+                                if sound != "None" {
+                                    NSSound(named: NSSound.Name(sound))?.play()
+                                }
+                            }
+                        }
                     }
                     .padding(10)
                     .frame(width: 170)

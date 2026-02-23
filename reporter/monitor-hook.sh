@@ -29,7 +29,7 @@ if [ "$state" = "notification_permission" ]; then
 fi
 
 # Single jq call: compute context + last_message + merge with previous, output final state JSON
-tmp_file="$MONITOR_DIR/.${session_id}.state.tmp"
+tmp_file="$MONITOR_DIR/.${session_id}.state.tmp.$$"
 echo "$input" | jq -n \
     --arg state "$state" \
     --slurpfile prev "$state_file" \
