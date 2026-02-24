@@ -78,6 +78,7 @@ if [ "$state" = "notification_permission" ]; then
 fi
 
 # Single jq call: compute context + last_message + merge with previous, output final state JSON
+# Note: subagent events map to "working" unless previous state is "idle" (late SubagentStop race)
 tmp_file="$MONITOR_DIR/.${session_id}.state.tmp.$$"
 echo "$input" | jq -n \
     --arg state "$state" \
@@ -138,10 +139,16 @@ echo "$input" | jq -n \
         else $prev_agents end
     else $prev_agents end) as $agents |
 
-    # For subagent events, keep state as working
-    (if $state == "subagent_start" or $state == "subagent_stop" then "working" else $state end) as $final_state |
+    ($p.state // "") as $prev_st |
+    (if $state == "subagent_stop" then
+        if ($prev_st == "idle") then "idle" else "working" end
+    elif $state == "subagent_start" then "working"
+    else $state end) as $final_state |
 
     {state: $final_state, context: $ctx, last_message: $msg, agents: $agents}
     ' > "$tmp_file"
 
 mv "$tmp_file" "$state_file"
+
+# Append state transition to history log for debugging
+echo "$(date +%s) ${session_id:0:8} $state $(jq -c . "$state_file" 2>/dev/null)" >> "$MONITOR_DIR/.history.log"
