@@ -97,6 +97,12 @@ If the app detects issues on startup, a yellow warning triangle appears in the f
     "SubagentStop": [
       { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh subagent_stop" }] }
     ],
+    "PostToolUse": [
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh working" }] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh working" }] }
+    ],
     "PreCompact": [
       { "matcher": ".*", "hooks": [{ "type": "command", "command": "~/.claude/monitor-hook.sh compacting" }] }
     ],
@@ -107,7 +113,7 @@ If the app detects issues on startup, a yellow warning triangle appears in the f
 }
 ```
 
-> **Note:** `notification_permission` (not `waiting_permission`) is intentional for `Notification(permission_prompt)`. The hook script suppresses late notification events when the session has already moved to `working` or `idle`, preventing stale "Needs Input" flashing.
+> **Note:** `notification_permission` (not `waiting_permission`) is intentional for `Notification(permission_prompt)`. The hook script only accepts this event when the session is already in `waiting_permission` state (set by the earlier `PermissionRequest` hook). All other states mean the notification is stale — it's suppressed to prevent false "Needs Input" flashing.
 
 </details>
 
